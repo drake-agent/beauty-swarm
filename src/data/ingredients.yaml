@@ -1,0 +1,210 @@
+ingredients:
+  - id: niacinamide
+    name: 나이아신아마이드
+    name_en: Niacinamide
+    category: brightening
+    mechanism: 멜라닌 전달 억제, 피지 조절, 피부 장벽 강화
+    benefits: [모공 축소, 피부톤 균일, 피지 조절, 장벽 강화]
+    addresses: [pore, dullness, oiliness, pigmentation]
+    safety_rating: excellent
+    ewa_grade: "1"
+
+  - id: bha
+    name: 살리실산 (BHA)
+    name_en: Salicylic Acid
+    category: exfoliant
+    mechanism: 지용성 각질 제거제로 모공 속 피지와 각질 용해
+    benefits: [모공 클리어링, 각질 제거, 트러블 진정]
+    addresses: [pore, oiliness, acne]
+    safety_rating: good
+    ewa_grade: "1"
+
+  - id: vitamin-c
+    name: 비타민C
+    name_en: Ascorbic Acid
+    category: antioxidant
+    mechanism: 멜라닌 합성 억제, 콜라겐 생성 촉진, 항산화
+    benefits: [미백, 광채, 안티에이징, 항산화]
+    addresses: [dullness, pigmentation, aging]
+    safety_rating: good
+    ewa_grade: "1"
+
+  - id: aha
+    name: AHA (글리콜산/락틱산)
+    name_en: Alpha Hydroxy Acid
+    category: exfoliant
+    mechanism: 수용성 각질 제거, 피부 턴오버 촉진
+    benefits: [각질 제거, 피부톤 균일, 텍스처 개선]
+    addresses: [dullness, pigmentation, dryness]
+    safety_rating: good
+    ewa_grade: "1-2"
+
+  - id: hyaluronic-acid
+    name: 히알루론산
+    name_en: Hyaluronic Acid
+    category: humectant
+    mechanism: 자기 무게의 1000배 수분 흡착, 피부 수분 유지
+    benefits: [수분 공급, 보습, 피부 충전감]
+    addresses: [dryness, aging]
+    safety_rating: excellent
+    ewa_grade: "1"
+
+  - id: ceramide
+    name: 세라마이드
+    name_en: Ceramide
+    category: barrier-repair
+    mechanism: 피부 장벽 지질 보충, 수분 증발 방지
+    benefits: [장벽 강화, 보습, 민감 완화]
+    addresses: [dryness, sensitivity]
+    safety_rating: excellent
+    ewa_grade: "1"
+
+  - id: centella
+    name: 센텔라 아시아티카
+    name_en: Centella Asiatica
+    category: soothing
+    mechanism: 마데카소사이드 등 트리테르펜 성분이 피부 진정 및 재생
+    benefits: [진정, 재생, 항염, 장벽 강화]
+    addresses: [sensitivity, acne, oiliness]
+    safety_rating: excellent
+    ewa_grade: "1"
+
+  - id: madecassoside
+    name: 마데카소사이드
+    name_en: Madecassoside
+    category: soothing
+    mechanism: 센텔라 유래 트리테르펜, 항염 및 콜라겐 합성 촉진
+    benefits: [진정, 재생, 흉터 개선]
+    addresses: [sensitivity, acne, pigmentation]
+    safety_rating: excellent
+    ewa_grade: "1"
+
+  - id: squalane
+    name: 스쿠알란
+    name_en: Squalane
+    category: emollient
+    mechanism: 피부 유사 지질로 빠르게 흡수, 수분 손실 방지
+    benefits: [보습, 유연, 장벽 보호]
+    addresses: [dryness, sensitivity, makeup-concern]
+    safety_rating: excellent
+    ewa_grade: "1"
+
+  - id: panthenol
+    name: 판테놀 (비타민B5)
+    name_en: Panthenol
+    category: soothing
+    mechanism: 피부 수분 결합, 상처 치유 촉진, 항염
+    benefits: [진정, 보습, 재생]
+    addresses: [sensitivity, dryness]
+    safety_rating: excellent
+    ewa_grade: "1"
+
+  - id: clay
+    name: 카올린/벤토나이트
+    name_en: Kaolin/Bentonite Clay
+    category: absorbent
+    mechanism: 다공성 구조로 피지와 불순물 흡착
+    benefits: [피지 흡착, 모공 클리어링, 딥클렌징]
+    addresses: [pore, oiliness]
+    safety_rating: excellent
+    ewa_grade: "1"
+
+  - id: zinc-pca
+    name: 징크PCA
+    name_en: Zinc PCA
+    category: sebum-control
+    mechanism: 5-알파 리덕타아제 억제, 피지 분비 조절
+    benefits: [피지 조절, 항균, 모공 관리]
+    addresses: [oiliness, pore, acne]
+    safety_rating: excellent
+    ewa_grade: "1"
+
+  - id: tea-tree
+    name: 티트리
+    name_en: Tea Tree Oil
+    category: antibacterial
+    mechanism: 테르피넨-4-올의 항균/항염 작용
+    benefits: [항균, 트러블 진정, 피지 조절]
+    addresses: [acne, oiliness]
+    safety_rating: good
+    ewa_grade: "1-2"
+
+  - id: retinol
+    name: 레티놀
+    name_en: Retinol
+    category: anti-aging
+    mechanism: 세포 턴오버 촉진, 콜라겐 합성 자극
+    benefits: [주름 개선, 탄력, 피부결 개선]
+    addresses: [aging]
+    safety_rating: moderate
+    ewa_grade: "1-3"
+
+  - id: peptide
+    name: 펩타이드
+    name_en: Peptide
+    category: anti-aging
+    mechanism: 콜라겐/엘라스틴 합성 신호 전달
+    benefits: [탄력, 주름 개선, 피부 회복]
+    addresses: [aging]
+    safety_rating: excellent
+    ewa_grade: "1"
+
+  - id: adenosine
+    name: 아데노신
+    name_en: Adenosine
+    category: anti-aging
+    mechanism: 세포 에너지 대사 촉진, 콜라겐 합성 촉진
+    benefits: [주름 개선, 탄력]
+    addresses: [aging]
+    safety_rating: excellent
+    ewa_grade: "1"
+
+  - id: arbutin
+    name: 알부틴
+    name_en: Arbutin
+    category: brightening
+    mechanism: 티로시나아제 활성 억제로 멜라닌 생성 차단
+    benefits: [미백, 잡티 개선, 피부톤 균일]
+    addresses: [pigmentation, dullness]
+    safety_rating: excellent
+    ewa_grade: "1"
+
+  - id: allantoin
+    name: 알란토인
+    name_en: Allantoin
+    category: soothing
+    mechanism: 세포 증식 촉진, 각질 연화
+    benefits: [진정, 재생, 보습]
+    addresses: [sensitivity]
+    safety_rating: excellent
+    ewa_grade: "1"
+
+  - id: collagen
+    name: 콜라겐
+    name_en: Collagen
+    category: anti-aging
+    mechanism: 피부 구조 단백질 보충, 수분 결합
+    benefits: [탄력, 보습, 주름 개선]
+    addresses: [aging, dryness]
+    safety_rating: excellent
+    ewa_grade: "1"
+
+  - id: silica
+    name: 실리카
+    name_en: Silica
+    category: mattifying
+    mechanism: 미세 입자가 빛을 산란, 피지 흡착
+    benefits: [보송함, 모공 블러, 베이스 밀착]
+    addresses: [makeup-concern, oiliness]
+    safety_rating: excellent
+    ewa_grade: "1"
+
+  - id: dimethicone
+    name: 디메치콘
+    name_en: Dimethicone
+    category: primer
+    mechanism: 실리콘 폴리머가 피부 위에 얇은 막 형성, 매끈한 표면
+    benefits: [매끈함, 베이스 밀착, 모공 커버]
+    addresses: [makeup-concern]
+    safety_rating: good
+    ewa_grade: "1"

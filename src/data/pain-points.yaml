@@ -1,0 +1,90 @@
+categories:
+  - id: pore
+    name: 모공 고민
+    description: 모공이 넓어 보이거나, 노폐물이 쌓이는 고민
+    variants:
+      - { id: pore-visible, label: "넓은 모공", keywords: ["모공", "모공 넓", "모공 크"] }
+      - { id: pore-blackhead, label: "블랙헤드", keywords: ["블랙헤드", "코 모공", "딸기코"] }
+      - { id: pore-whitehead, label: "화이트헤드", keywords: ["화이트헤드", "좁쌀", "피지"] }
+    related_ingredients: [niacinamide, bha, clay, zinc-pca]
+    related_products: [clean-it-zero-pore-clarifying, prime-primer-pore]
+
+  - id: dullness
+    name: 칙칙함/누런 피부
+    description: 피부톤이 고르지 않거나 칙칙해 보이는 고민
+    variants:
+      - { id: dull-yellowish, label: "누런 피부톤", keywords: ["누렇", "칙칙", "노랗"] }
+      - { id: dull-uneven, label: "피부톤 불균일", keywords: ["얼룩", "톤 불균일", "잡티"] }
+      - { id: dull-lack-glow, label: "광채 부족", keywords: ["광채", "윤기", "생기"] }
+    related_ingredients: [vitamin-c, aha, niacinamide, arbutin]
+    related_products: [clean-it-zero-purifying, covericious-skin-fit]
+
+  - id: oiliness
+    name: 유분/번들거림
+    description: 과도한 피지 분비로 번들거리는 고민
+    variants:
+      - { id: oil-tzone, label: "T존 번들거림", keywords: ["T존", "이마 기름", "코 기름"] }
+      - { id: oil-allover, label: "전체 유분", keywords: ["기름", "번들", "유분", "개기름"] }
+      - { id: oil-makeup-melt, label: "화장 무너짐", keywords: ["화장 무너", "밀림", "뜨"] }
+    related_ingredients: [zinc-pca, bha, centella, tea-tree]
+    related_products: [clean-it-zero-revitalizing, prime-primer-matte]
+
+  - id: dryness
+    name: 건조/당김
+    description: 수분 부족으로 건조하고 당기는 고민
+    variants:
+      - { id: dry-tight, label: "세안 후 당김", keywords: ["당김", "건조", "뻣뻣"] }
+      - { id: dry-flaky, label: "각질/들뜸", keywords: ["각질", "들뜸", "벗겨"] }
+      - { id: dry-dehydrated, label: "수분 부족", keywords: ["수분", "촉촉", "보습"] }
+    related_ingredients: [hyaluronic-acid, ceramide, squalane, panthenol]
+    related_products: [clean-it-zero-nourishing, dear-hydration]
+
+  - id: sensitivity
+    name: 민감/자극
+    description: 피부가 예민하거나 쉽게 자극받는 고민
+    variants:
+      - { id: sens-redness, label: "홍조/붉음", keywords: ["홍조", "붉", "빨갛"] }
+      - { id: sens-reactive, label: "자극 반응", keywords: ["따가", "자극", "쓰라린"] }
+      - { id: sens-barrier, label: "장벽 손상", keywords: ["장벽", "피부 얇", "예민"] }
+    related_ingredients: [centella, madecassoside, panthenol, allantoin]
+    related_products: [clean-it-zero-calming, dear-hydration]
+
+  - id: acne
+    name: 트러블/여드름
+    description: 여드름, 뾰루지 등 트러블 고민
+    variants:
+      - { id: acne-hormonal, label: "생리 전 트러블", keywords: ["생리", "호르몬", "턱 트러블"] }
+      - { id: acne-stress, label: "스트레스성 트러블", keywords: ["스트레스", "뾰루지"] }
+      - { id: acne-persistent, label: "만성 여드름", keywords: ["여드름", "트러블", "염증"] }
+    related_ingredients: [bha, tea-tree, centella, zinc-pca]
+    related_products: [clean-it-zero-purifying, clean-it-zero-revitalizing]
+
+  - id: aging
+    name: 주름/탄력
+    description: 피부 노화 징후 관련 고민
+    variants:
+      - { id: aging-fine-lines, label: "잔주름", keywords: ["잔주름", "눈가", "입가"] }
+      - { id: aging-elasticity, label: "탄력 저하", keywords: ["탄력", "처짐", "탱탱"] }
+      - { id: aging-prevention, label: "안티에이징 예방", keywords: ["노화 방지", "안티에이징", "예방"] }
+    related_ingredients: [retinol, peptide, adenosine, collagen]
+    related_products: [clean-it-zero-nourishing, covericious-skin-fit]
+
+  - id: pigmentation
+    name: 색소침착/잡티
+    description: 기미, 주근깨, 여드름 자국 등 색소 문제
+    variants:
+      - { id: pig-dark-spots, label: "기미/잡티", keywords: ["기미", "잡티", "검은 점"] }
+      - { id: pig-acne-scars, label: "여드름 자국", keywords: ["자국", "흉터", "트러블 자국"] }
+      - { id: pig-freckles, label: "주근깨", keywords: ["주근깨", "점"] }
+    related_ingredients: [vitamin-c, niacinamide, arbutin, aha]
+    related_products: [clean-it-zero-purifying, covericious-skin-fit]
+
+  - id: makeup-concern
+    name: 메이크업 고민
+    description: 메이크업 관련 피부 준비, 지속력 등
+    variants:
+      - { id: makeup-base, label: "베이스 밀착", keywords: ["베이스", "밀착", "화장 잘 받"] }
+      - { id: makeup-longevity, label: "화장 지속력", keywords: ["지속", "오래", "고정"] }
+      - { id: makeup-removal, label: "클렌징 고민", keywords: ["클렌징", "세안", "지우기"] }
+    related_ingredients: [silica, dimethicone, squalane]
+    related_products: [clean-it-zero-original, prime-primer-classic, covericious-skin-fit]

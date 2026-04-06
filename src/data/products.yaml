@@ -1,0 +1,169 @@
+products:
+  # === Clean It Zero 라인 ===
+  - id: clean-it-zero-original
+    name: 클린잇제로 클렌징 밤 오리지널
+    name_en: Clean It Zero Cleansing Balm Original
+    line: clean-it-zero
+    category: cleansing
+    routine_step: 1st-cleanse
+    description: 바닐라코 시그니처 클렌징 밤. 셰릴 오일 기반으로 메이크업을 녹여내며 촉촉함 유지.
+    key_ingredients: [squalane, ceramide, panthenol]
+    addresses: [makeup-concern, dryness]
+    skin_type_fit: [all]
+    price_range: mid
+    size_ml: 100
+    hero_product: true
+    tagline: "Zero to Glow의 시작"
+
+  - id: clean-it-zero-purifying
+    name: 클린잇제로 클렌징 밤 퓨리파잉
+    name_en: Clean It Zero Cleansing Balm Purifying
+    line: clean-it-zero
+    category: cleansing
+    routine_step: 1st-cleanse
+    description: 비타민C와 AHA 함유로 칙칙한 피부톤을 맑게 정리하는 클렌징 밤.
+    key_ingredients: [vitamin-c, aha, niacinamide]
+    addresses: [dullness, pigmentation, makeup-concern]
+    skin_type_fit: [normal, combination]
+    price_range: mid
+    size_ml: 100
+    hero_product: false
+    tagline: "맑은 피부톤을 위한 클렌징"
+
+  - id: clean-it-zero-revitalizing
+    name: 클린잇제로 클렌징 밤 리바이탈라이징
+    name_en: Clean It Zero Cleansing Balm Revitalizing
+    line: clean-it-zero
+    category: cleansing
+    routine_step: 1st-cleanse
+    description: 센텔라와 티트리 성분으로 피지와 트러블을 관리하는 클렌징 밤.
+    key_ingredients: [centella, tea-tree, bha]
+    addresses: [oiliness, acne, pore]
+    skin_type_fit: [oily, combination]
+    price_range: mid
+    size_ml: 100
+    hero_product: false
+    tagline: "피지와 트러블 고민 해결"
+
+  - id: clean-it-zero-nourishing
+    name: 클린잇제로 클렌징 밤 너리싱
+    name_en: Clean It Zero Cleansing Balm Nourishing
+    line: clean-it-zero
+    category: cleansing
+    routine_step: 1st-cleanse
+    description: 세라마이드와 히알루론산으로 건조한 피부를 촉촉하게 케어하는 클렌징 밤.
+    key_ingredients: [ceramide, hyaluronic-acid, squalane]
+    addresses: [dryness, sensitivity, aging]
+    skin_type_fit: [dry, sensitive]
+    price_range: mid
+    size_ml: 100
+    hero_product: false
+    tagline: "건조 피부를 위한 영양 클렌징"
+
+  - id: clean-it-zero-pore-clarifying
+    name: 클린잇제로 포어 클래리파잉
+    name_en: Clean It Zero Pore Clarifying
+    line: clean-it-zero
+    category: cleansing
+    routine_step: 1st-cleanse
+    description: BHA와 징크PCA로 모공 속 피지와 블랙헤드를 집중 케어하는 클렌징 밤.
+    key_ingredients: [bha, zinc-pca, clay]
+    addresses: [pore, oiliness]
+    skin_type_fit: [oily, combination]
+    price_range: mid
+    size_ml: 100
+    hero_product: false
+    tagline: "모공 딥 클렌징"
+
+  - id: clean-it-zero-calming
+    name: 클린잇제로 클렌징 밤 카밍
+    name_en: Clean It Zero Cleansing Balm Calming
+    line: clean-it-zero
+    category: cleansing
+    routine_step: 1st-cleanse
+    description: 마데카소사이드와 판테놀로 민감한 피부를 순하게 클렌징하는 밤.
+    key_ingredients: [madecassoside, panthenol, allantoin]
+    addresses: [sensitivity]
+    skin_type_fit: [sensitive]
+    price_range: mid
+    size_ml: 100
+    hero_product: false
+    tagline: "민감 피부를 위한 순한 클렌징"
+
+  # === Prime Primer 라인 ===
+  - id: prime-primer-classic
+    name: 프라임 프라이머 클래식
+    name_en: Prime Primer Classic
+    line: prime-primer
+    category: primer
+    routine_step: makeup-base
+    description: 매끈한 베이스를 만들어주는 바닐라코 대표 프라이머.
+    key_ingredients: [dimethicone, squalane, silica]
+    addresses: [makeup-concern]
+    skin_type_fit: [all]
+    price_range: mid
+    size_ml: 30
+    hero_product: true
+    tagline: "완벽한 베이스의 시작"
+
+  - id: prime-primer-pore
+    name: 프라임 프라이머 포어 타이트닝
+    name_en: Prime Primer Pore Tightening
+    line: prime-primer
+    category: primer
+    routine_step: makeup-base
+    description: 모공을 매끈하게 커버하며 피지를 잡아주는 프라이머.
+    key_ingredients: [silica, zinc-pca, niacinamide]
+    addresses: [pore, oiliness, makeup-concern]
+    skin_type_fit: [oily, combination]
+    price_range: mid
+    size_ml: 30
+    hero_product: false
+    tagline: "모공 제로 매끈 베이스"
+
+  - id: prime-primer-matte
+    name: 프라임 프라이머 매트 피니시
+    name_en: Prime Primer Matte Finish
+    line: prime-primer
+    category: primer
+    routine_step: makeup-base
+    description: 유분기를 잡아 보송한 마무리감을 유지하는 프라이머.
+    key_ingredients: [silica, zinc-pca]
+    addresses: [oiliness, makeup-concern]
+    skin_type_fit: [oily]
+    price_range: mid
+    size_ml: 30
+    hero_product: false
+    tagline: "하루종일 보송한 피부"
+
+  # === Covericious 라인 ===
+  - id: covericious-skin-fit
+    name: 커버리셔스 스킨핏 파운데이션
+    name_en: Covericious Skin Fit Foundation
+    line: covericious
+    category: foundation
+    routine_step: makeup-base
+    description: 피부에 밀착되어 자연스러운 커버력과 광채를 동시에 잡아주는 파운데이션.
+    key_ingredients: [niacinamide, adenosine, hyaluronic-acid]
+    addresses: [dullness, aging, makeup-concern]
+    skin_type_fit: [all]
+    price_range: mid-high
+    size_ml: 30
+    hero_product: false
+    tagline: "피부처럼 자연스러운 커버"
+
+  # === Dear Hydration 라인 ===
+  - id: dear-hydration
+    name: 디어 하이드레이션 크림
+    name_en: Dear Hydration Cream
+    line: dear-hydration
+    category: moisturizer
+    routine_step: moisturize
+    description: 히알루론산과 세라마이드로 72시간 보습력을 유지하는 수분 크림.
+    key_ingredients: [hyaluronic-acid, ceramide, panthenol]
+    addresses: [dryness, sensitivity]
+    skin_type_fit: [dry, normal, sensitive]
+    price_range: mid
+    size_ml: 50
+    hero_product: false
+    tagline: "72시간 깊은 수분"
