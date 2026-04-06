@@ -1,5 +1,5 @@
 import type { Context, Next } from "hono";
-import { getDb } from "../db/schema.js";
+import { getPool } from "../db/schema.js";
 
 export async function authMiddleware(c: Context, next: Next): Promise<Response | void> {
   const authHeader = c.req.header("Authorization");
@@ -12,18 +12,22 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
   }
 
   const apiKey = authHeader.slice(7);
-  const db = getDb();
+  const pool = getPool();
 
-  const keyRow = db.query(
-    "SELECT * FROM api_keys WHERE key = ? AND is_active = 1"
-  ).get(apiKey) as any;
+  const { rows } = await pool.query(
+    "SELECT * FROM api_keys WHERE key = $1 AND is_active = TRUE",
+    [apiKey]
+  );
 
-  if (!keyRow) {
+  if (rows.length === 0) {
     return c.json({ error: "Invalid or inactive API key" }, 401);
   }
 
-  // Update last used
-  db.run("UPDATE api_keys SET last_used_at = datetime('now') WHERE key = ?", [apiKey]);
+  const keyRow = rows[0];
+
+  // Update last used (fire-and-forget)
+  pool.query("UPDATE api_keys SET last_used_at = NOW() WHERE key = $1", [apiKey])
+    .catch(() => {}); // non-critical
 
   // Attach to context
   c.set("apiKey", apiKey);
@@ -34,12 +38,12 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
 }
 
 // Generate a new API key
-export function generateApiKey(label: string, userId?: string): string {
-  const db = getDb();
+export async function generateApiKey(label: string, userId?: string): Promise<string> {
+  const pool = getPool();
   const key = `bpc_${crypto.randomUUID().replace(/-/g, "")}`;
 
-  db.run(
-    `INSERT INTO api_keys (key, user_id, label) VALUES (?, ?, ?)`,
+  await pool.query(
+    `INSERT INTO api_keys (key, user_id, label) VALUES ($1, $2, $3)`,
     [key, userId || null, label]
   );
 
@@ -47,7 +51,12 @@ export function generateApiKey(label: string, userId?: string): string {
 }
 
 // List API keys
-export function listApiKeys(): Array<{ key: string; label: string; user_id: string | null; is_active: boolean; last_used_at: string | null }> {
-  const db = getDb();
-  return db.query("SELECT key, label, user_id, is_active, last_used_at FROM api_keys").all() as any[];
+export async function listApiKeys(): Promise<
+  Array<{ key: string; label: string; user_id: string | null; is_active: boolean; last_used_at: string | null }>
+> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    "SELECT key, label, user_id, is_active, last_used_at FROM api_keys"
+  );
+  return rows;
 }

@@ -83,7 +83,7 @@ export class ChatEngine {
     // Enrich first message with user context from DB or request
     let enrichedMessage = request.message;
     if (session.messages.length === 0) {
-      const userCtx = request.user_context || (apiKey ? this.loadUserContext(apiKey) : undefined);
+      const userCtx = request.user_context || (apiKey ? await this.loadUserContext(apiKey) : undefined);
       if (userCtx) {
         const parts: string[] = [];
         if (userCtx.skin_type) parts.push(`피부 타입: ${userCtx.skin_type}`);
@@ -105,10 +105,10 @@ export class ChatEngine {
     // Call LLM
     const response = await callLLM(systemPrompt, messages);
 
-    // Save to session
+    // Save enriched message (same as what LLM saw) for context continuity
     sessionStore.addMessage(session.id, {
       role: "user",
-      content: request.message,
+      content: enrichedMessage,
     });
     sessionStore.addMessage(session.id, {
       role: "assistant",
@@ -129,9 +129,9 @@ export class ChatEngine {
     };
   }
 
-  private loadUserContext(apiKey: string): UserContext | undefined {
+  private async loadUserContext(apiKey: string): Promise<UserContext | undefined> {
     try {
-      const user = getUserByApiKey(apiKey);
+      const user = await getUserByApiKey(apiKey);
       if (!user) return undefined;
       return {
         skin_type: user.skin_type || undefined,

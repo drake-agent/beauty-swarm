@@ -126,28 +126,25 @@ export class KnowledgeGraph {
     products: Product[],
     strategy: GraphStrategy
   ): void {
+    const safetyOrder = { excellent: 0, good: 1, moderate: 2 };
     switch (strategy) {
       case "ingredient-first":
         ingredients.sort((a, b) =>
-          a.safety_rating === "excellent" ? -1 : 1
+          safetyOrder[a.safety_rating] - safetyOrder[b.safety_rating]
         );
         break;
       case "cost-effective":
         products.sort((a, b) => {
-          const priceOrder = { low: 0, mid: 1, "mid-high": 2, high: 3 };
-          return priceOrder[a.price_range] - priceOrder[b.price_range];
+          const priceOrder: Record<string, number> = { low: 0, mid: 1, "mid-high": 2, high: 3 };
+          return (priceOrder[a.price_range] ?? 9) - (priceOrder[b.price_range] ?? 9);
         });
         break;
       case "minimal-routine":
-        products.sort((a, b) => (a.hero_product ? -1 : 1));
+        products.sort((a, b) => (a.hero_product === b.hero_product ? 0 : a.hero_product ? -1 : 1));
         break;
       case "safety-first":
         ingredients.sort((a, b) =>
-          a.safety_rating === "excellent"
-            ? -1
-            : a.safety_rating === "good"
-              ? 0
-              : 1
+          safetyOrder[a.safety_rating] - safetyOrder[b.safety_rating]
         );
         break;
       case "experience-first":

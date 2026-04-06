@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const HAIKU_MODEL = "claude-sonnet-4-20250514";
+const CLASSIFY_MODEL = "claude-sonnet-4-20250514";
 
 const CLASSIFY_PROMPT = `사용자 메시지에서 피부 고민과 의도를 분석하세요.
 
@@ -48,7 +48,7 @@ export async function classifyIntent(
     if (!client) client = new Anthropic();
 
     const response = await client.messages.create({
-      model: HAIKU_MODEL,
+      model: CLASSIFY_MODEL,
       max_tokens: 200,
       system: CLASSIFY_PROMPT,
       messages: [{ role: "user", content: message }],

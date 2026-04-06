@@ -16,6 +16,7 @@ export interface UserContext {
 }
 
 const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 class SessionStore {
   private sessions: Map<string, Session> = new Map();
@@ -63,3 +64,6 @@ class SessionStore {
 }
 
 export const sessionStore = new SessionStore();
+
+// Auto-cleanup expired sessions
+setInterval(() => sessionStore.cleanup(), CLEANUP_INTERVAL_MS);

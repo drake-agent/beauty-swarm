@@ -1,4 +1,4 @@
-import { getDb } from "./schema.js";
+import { getPool } from "./schema.js";
 
 export interface ProductRow {
   id: string;
@@ -20,85 +20,113 @@ export interface ProductRow {
   url: string | null;
 }
 
-export function seedProducts(products: ProductRow[]): void {
-  const db = getDb();
-  const stmt = db.prepare(`
-    INSERT OR REPLACE INTO products
+export async function seedProducts(products: ProductRow[]): Promise<void> {
+  const pool = getPool();
+
+  const query = `
+    INSERT INTO products
     (id, name, name_en, line, category, routine_step, description,
      key_ingredients, addresses, skin_type_fit, price_krw, price_range,
      size_ml, hero_product, tagline, in_stock, url, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-  `);
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())
+    ON CONFLICT (id) DO UPDATE SET
+      name = EXCLUDED.name,
+      name_en = EXCLUDED.name_en,
+      line = EXCLUDED.line,
+      category = EXCLUDED.category,
+      routine_step = EXCLUDED.routine_step,
+      description = EXCLUDED.description,
+      key_ingredients = EXCLUDED.key_ingredients,
+      addresses = EXCLUDED.addresses,
+      skin_type_fit = EXCLUDED.skin_type_fit,
+      price_krw = EXCLUDED.price_krw,
+      price_range = EXCLUDED.price_range,
+      size_ml = EXCLUDED.size_ml,
+      hero_product = EXCLUDED.hero_product,
+      tagline = EXCLUDED.tagline,
+      in_stock = EXCLUDED.in_stock,
+      url = EXCLUDED.url,
+      updated_at = NOW()
+  `;
 
-  const tx = db.transaction(() => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
     for (const p of products) {
-      stmt.run(
+      await client.query(query, [
         p.id, p.name, p.name_en, p.line, p.category, p.routine_step,
         p.description, JSON.stringify(p.key_ingredients), JSON.stringify(p.addresses),
         JSON.stringify(p.skin_type_fit), p.price_krw, p.price_range,
-        p.size_ml, p.hero_product ? 1 : 0, p.tagline, p.in_stock ? 1 : 0, p.url
-      );
+        p.size_ml, p.hero_product, p.tagline, p.in_stock, p.url,
+      ]);
     }
-  });
-  tx();
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
-export function getAllProducts(): ProductRow[] {
-  const db = getDb();
-  const rows = db.query("SELECT * FROM products WHERE in_stock = 1").all() as any[];
-  return rows.map(parseRow);
+export async function getAllProducts(): Promise<ProductRow[]> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    "SELECT * FROM products WHERE in_stock = TRUE"
+  );
+  return rows;
 }
 
-export function getProductById(id: string): ProductRow | null {
-  const db = getDb();
-  const row = db.query("SELECT * FROM products WHERE id = ?").get(id) as any;
-  return row ? parseRow(row) : null;
+export async function getProductById(id: string): Promise<ProductRow | null> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    "SELECT * FROM products WHERE id = $1",
+    [id]
+  );
+  return rows[0] || null;
 }
 
-export function searchProducts(query: {
+export async function searchProducts(query: {
   concern?: string;
   ingredient?: string;
   skin_type?: string;
   line?: string;
   category?: string;
-}): ProductRow[] {
-  const db = getDb();
-  const conditions: string[] = ["in_stock = 1"];
-  const params: string[] = [];
+}): Promise<ProductRow[]> {
+  const pool = getPool();
+  const conditions: string[] = ["in_stock = TRUE"];
+  const params: unknown[] = [];
+  let paramIdx = 1;
 
   if (query.concern) {
-    conditions.push("addresses LIKE ?");
-    params.push(`%"${query.concern}"%`);
+    conditions.push(`addresses @> $${paramIdx}::jsonb`);
+    params.push(JSON.stringify([query.concern]));
+    paramIdx++;
   }
   if (query.ingredient) {
-    conditions.push("key_ingredients LIKE ?");
-    params.push(`%"${query.ingredient}"%`);
+    conditions.push(`key_ingredients @> $${paramIdx}::jsonb`);
+    params.push(JSON.stringify([query.ingredient]));
+    paramIdx++;
   }
   if (query.skin_type) {
-    conditions.push("(skin_type_fit LIKE ? OR skin_type_fit LIKE '%\"all\"%')");
-    params.push(`%"${query.skin_type}"%`);
+    conditions.push(
+      `(skin_type_fit @> $${paramIdx}::jsonb OR skin_type_fit @> '"all"'::jsonb)`
+    );
+    params.push(JSON.stringify([query.skin_type]));
+    paramIdx++;
   }
   if (query.line) {
-    conditions.push("line = ?");
+    conditions.push(`line = $${paramIdx}`);
     params.push(query.line);
+    paramIdx++;
   }
   if (query.category) {
-    conditions.push("category = ?");
+    conditions.push(`category = $${paramIdx}`);
     params.push(query.category);
+    paramIdx++;
   }
 
   const sql = `SELECT * FROM products WHERE ${conditions.join(" AND ")}`;
-  const rows = db.query(sql).all(...params) as any[];
-  return rows.map(parseRow);
-}
-
-function parseRow(row: any): ProductRow {
-  return {
-    ...row,
-    key_ingredients: JSON.parse(row.key_ingredients),
-    addresses: JSON.parse(row.addresses),
-    skin_type_fit: JSON.parse(row.skin_type_fit),
-    hero_product: row.hero_product === 1,
-    in_stock: row.in_stock === 1,
-  };
+  const { rows } = await pool.query(sql, params);
+  return rows;
 }

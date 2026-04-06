@@ -13,36 +13,36 @@ import { personasRoute } from "./api/personas.js";
 import { adminRoute } from "./api/admin.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { rateLimitMiddleware } from "./middleware/rate-limit.js";
-import { getDb } from "./db/schema.js";
+import { initSchema } from "./db/schema.js";
 import { seedProducts } from "./db/products.js";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { parse } from "yaml";
 
 const app = new Hono();
-
 app.use("*", cors());
 
-// Initialize DB + seed
-getDb();
-seedProductsFromYaml();
-
-// Core services
+// Core services (sync — no DB needed)
 const graph = new KnowledgeGraph();
 const registry = new PersonaRegistry();
 const chatEngine = new ChatEngine(graph, registry);
 const panelEngine = new PanelEngine(graph, registry);
-const ADMIN_KEY = process.env.ADMIN_KEY || "admin_dev_key";
+const ADMIN_KEY = process.env.ADMIN_KEY;
+if (!ADMIN_KEY) {
+  console.error("❌ ADMIN_KEY environment variable is required");
+  process.exit(1);
+}
 
 // =====================
-// PUBLIC (no auth)
+// PUBLIC
 // =====================
 
 app.get("/", (c) =>
   c.json({
     name: "beauty-swarm",
-    version: "0.2.0",
+    version: "0.3.0",
     disclaimer: "AI-powered service. All personas are AI characters.",
+    db: "PostgreSQL",
     endpoints: {
       public: ["GET /", "GET /personas", "GET /personas/:id", "GET /pain-points"],
       authenticated: ["POST /chat", "POST /panel", "POST /recommend", "POST /analyze", "POST /personas/generate", "GET /users/me", "PATCH /users/me"],
@@ -75,10 +75,9 @@ app.get("/pain-points", (c) =>
 );
 
 // =====================
-// AUTHENTICATED (Bearer token)
+// AUTHENTICATED
 // =====================
 
-// Apply auth to all POST + /users/*
 app.use("/chat", authMiddleware, rateLimitMiddleware);
 app.use("/panel", authMiddleware, rateLimitMiddleware);
 app.use("/recommend", authMiddleware, rateLimitMiddleware);
@@ -92,33 +91,34 @@ app.route("/recommend", recommendRoute(graph, registry));
 app.route("/analyze", analyzeRoute(graph, registry));
 app.route("/users", usersRoute());
 
-// Persona generate (authed sub-route)
 const personaRouter = personasRoute(registry, graph);
 app.post("/personas/generate", async (c) => {
   const url = new URL(c.req.url);
   url.pathname = "/generate";
-  const req = new Request(url.toString(), {
-    method: c.req.method,
-    headers: c.req.raw.headers,
-    body: c.req.raw.body,
-  });
-  return personaRouter.fetch(req);
+  return personaRouter.fetch(
+    new Request(url.toString(), { method: c.req.method, headers: c.req.raw.headers, body: c.req.raw.body })
+  );
 });
 
 // =====================
-// ADMIN (separate auth in adminRoute)
+// ADMIN
 // =====================
 app.route("/admin", adminRoute(ADMIN_KEY));
 
 // =====================
-// Helpers
+// Bootstrap
 // =====================
 
-function seedProductsFromYaml(): void {
+async function bootstrap(): Promise<void> {
+  // Init PostgreSQL schema
+  await initSchema();
+  console.log("✅ PostgreSQL schema initialized");
+
+  // Seed products from YAML
   try {
     const dataDir = join(import.meta.dir ?? ".", "data");
     const raw = parse(readFileSync(join(dataDir, "products.yaml"), "utf-8"));
-    seedProducts(
+    await seedProducts(
       raw.products.map((p: any) => ({
         ...p,
         price_krw: p.price_krw || null,
@@ -127,16 +127,23 @@ function seedProductsFromYaml(): void {
         url: p.url || null,
       }))
     );
-  } catch {
-    console.warn("⚠️ Could not seed products (non-fatal)");
+    console.log(`✅ Seeded ${raw.products.length} products`);
+  } catch (err) {
+    console.warn("⚠️ Could not seed products:", (err as Error).message);
   }
 }
 
+// Run bootstrap then start server
 const PORT = parseInt(process.env.PORT || "3000", 10);
 
-export default { port: PORT, fetch: app.fetch };
+bootstrap().then(() => {
+  console.log(`🧴 beauty-swarm v0.3.0 → http://localhost:${PORT}`);
+  console.log(`📋 ${registry.list().length} personas | 🧬 ${graph.getAllPainPoints().length} concerns | 🏷️ ${graph.getAllProducts().length} products`);
+  console.log(`🐘 PostgreSQL | 🔐 Auth required | 👑 Admin key configured`);
+}).catch((err) => {
+  console.error("❌ Bootstrap failed:", err.message);
+  console.error("   Make sure DATABASE_URL is set or PostgreSQL is running on localhost:5432/beauty_swarm");
+  process.exit(1);
+});
 
-console.log(`🧴 beauty-swarm v0.2.0 → http://localhost:${PORT}`);
-console.log(`📋 ${registry.list().length} personas | 🧬 ${graph.getAllPainPoints().length} concerns | 🏷️ ${graph.getAllProducts().length} products`);
-console.log(`🔐 Auth required for chat/panel/recommend/analyze`);
-console.log(`👑 Admin: POST /admin/api-keys (Bearer ${ADMIN_KEY.slice(0, 8)}...)`);
+export default { port: PORT, fetch: app.fetch };

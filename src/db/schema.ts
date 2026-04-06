@@ -1,30 +1,33 @@
-import { Database } from "bun:sqlite";
-import { join } from "path";
+import pg from "pg";
 
-const DB_PATH = join(
-  import.meta.dir ?? new URL(".", import.meta.url).pathname,
-  "..",
-  "..",
-  "data",
-  "beauty-swarm.db"
-);
+const { Pool } = pg;
 
-let db: Database | null = null;
+let pool: pg.Pool | null = null;
 
-export function getDb(): Database {
-  if (!db) {
-    const { mkdirSync } = require("fs");
-    mkdirSync(join(DB_PATH, ".."), { recursive: true });
-    db = new Database(DB_PATH);
-    db.run("PRAGMA journal_mode = WAL");
-    db.run("PRAGMA foreign_keys = ON");
-    initSchema(db);
+export function getPool(): pg.Pool {
+  if (!pool) {
+    const connectionString =
+      process.env.DATABASE_URL ||
+      "postgresql://localhost:5432/beauty_swarm";
+
+    pool = new Pool({
+      connectionString,
+      max: 10,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 5_000,
+    });
+
+    pool.on("error", (err) => {
+      console.error("Unexpected PG pool error:", err.message);
+    });
   }
-  return db;
+  return pool;
 }
 
-function initSchema(db: Database): void {
-  db.run(`
+export async function initSchema(): Promise<void> {
+  const p = getPool();
+
+  await p.query(`
     CREATE TABLE IF NOT EXISTS products (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -33,81 +36,77 @@ function initSchema(db: Database): void {
       category TEXT NOT NULL,
       routine_step TEXT NOT NULL,
       description TEXT NOT NULL,
-      key_ingredients TEXT NOT NULL,  -- JSON array
-      addresses TEXT NOT NULL,        -- JSON array
-      skin_type_fit TEXT NOT NULL,    -- JSON array
+      key_ingredients JSONB NOT NULL DEFAULT '[]',
+      addresses JSONB NOT NULL DEFAULT '[]',
+      skin_type_fit JSONB NOT NULL DEFAULT '[]',
       price_krw INTEGER,
       price_range TEXT NOT NULL,
       size_ml INTEGER NOT NULL,
-      hero_product INTEGER NOT NULL DEFAULT 0,
+      hero_product BOOLEAN NOT NULL DEFAULT FALSE,
       tagline TEXT NOT NULL,
-      in_stock INTEGER NOT NULL DEFAULT 1,
+      in_stock BOOLEAN NOT NULL DEFAULT TRUE,
       url TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
 
-  db.run(`
+  await p.query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       api_key TEXT UNIQUE NOT NULL,
       name TEXT,
       skin_type TEXT,
       age_group TEXT,
-      concerns TEXT,            -- JSON array
-      allergies TEXT,           -- JSON array
-      preferences TEXT,         -- JSON object
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      concerns JSONB NOT NULL DEFAULT '[]',
+      allergies JSONB NOT NULL DEFAULT '[]',
+      preferences JSONB NOT NULL DEFAULT '{}',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
 
-  db.run(`
+  await p.query(`
     CREATE TABLE IF NOT EXISTS api_keys (
       key TEXT PRIMARY KEY,
-      user_id TEXT,
+      user_id TEXT REFERENCES users(id),
       label TEXT NOT NULL,
-      permissions TEXT NOT NULL DEFAULT '["chat","panel","recommend"]',  -- JSON array
+      permissions JSONB NOT NULL DEFAULT '["chat","panel","recommend"]',
       rate_limit_per_min INTEGER NOT NULL DEFAULT 30,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      last_used_at TEXT,
-      FOREIGN KEY (user_id) REFERENCES users(id)
+      is_active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_used_at TIMESTAMPTZ
     )
   `);
 
-  db.run(`
+  await p.query(`
     CREATE TABLE IF NOT EXISTS usage_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       api_key TEXT,
       endpoint TEXT NOT NULL,
       persona_id TEXT,
       input_tokens INTEGER NOT NULL DEFAULT 0,
       output_tokens INTEGER NOT NULL DEFAULT 0,
-      cost_usd REAL NOT NULL DEFAULT 0,
+      cost_usd NUMERIC(10, 6) NOT NULL DEFAULT 0,
       latency_ms INTEGER NOT NULL DEFAULT 0,
       status_code INTEGER NOT NULL DEFAULT 200,
       error TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (api_key) REFERENCES api_keys(key)
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
 
-  db.run(`
-    CREATE INDEX IF NOT EXISTS idx_usage_api_key ON usage_logs(api_key)
-  `);
-  db.run(`
-    CREATE INDEX IF NOT EXISTS idx_usage_created ON usage_logs(created_at)
-  `);
-  db.run(`
-    CREATE INDEX IF NOT EXISTS idx_usage_endpoint ON usage_logs(endpoint)
-  `);
+  // Indexes
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_usage_api_key ON usage_logs(api_key)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_usage_created ON usage_logs(created_at)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_usage_endpoint ON usage_logs(endpoint)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_products_addresses ON products USING GIN(addresses)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_products_ingredients ON products USING GIN(key_ingredients)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_products_skin_type ON products USING GIN(skin_type_fit)`);
 }
 
-export function closeDb(): void {
-  if (db) {
-    db.close();
-    db = null;
+export async function closeDb(): Promise<void> {
+  if (pool) {
+    await pool.end();
+    pool = null;
   }
 }

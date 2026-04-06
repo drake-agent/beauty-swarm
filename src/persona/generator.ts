@@ -134,6 +134,12 @@ export async function generateAndSavePersona(
 ): Promise<PersonaProfile> {
   const profile = await generatePersona(request, graph);
 
+  // Sanitize ID to prevent path traversal
+  const safeId = profile.id.replace(/[^a-z0-9-]/g, "").slice(0, 64);
+  if (!safeId || safeId !== profile.id) {
+    profile.id = safeId || `persona-${Date.now()}`;
+  }
+
   // Save as YAML
   const yamlContent = stringify(profile);
   const filePath = join(PROFILES_DIR, `${profile.id}.yaml`);

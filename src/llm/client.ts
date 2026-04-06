@@ -1,13 +1,14 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const MODEL = "claude-sonnet-4-6-20250514";
+const MODEL = "claude-sonnet-4-20250514";
 const MAX_TOKENS = 4096;
+const TIMEOUT_MS = 60_000;
 
 let client: Anthropic | null = null;
 
 function getClient(): Anthropic {
   if (!client) {
-    client = new Anthropic();
+    client = new Anthropic({ timeout: TIMEOUT_MS });
   }
   return client;
 }

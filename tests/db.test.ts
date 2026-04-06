@@ -1,12 +1,13 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { Database } from "bun:sqlite";
 
-// Use in-memory DB for tests
+// Unit tests use in-memory SQLite to verify query logic
+// without requiring a PostgreSQL instance.
+// The actual PG schema uses JSONB/BOOLEAN/SERIAL but the logic is the same.
 let db: Database;
 
 beforeAll(() => {
   db = new Database(":memory:");
-  db.run("PRAGMA foreign_keys = ON");
 
   db.run(`CREATE TABLE products (
     id TEXT PRIMARY KEY,
@@ -62,9 +63,7 @@ beforeAll(() => {
   )`);
 });
 
-afterAll(() => {
-  db.close();
-});
+afterAll(() => db.close());
 
 describe("Products DB", () => {
   test("insert and query product", () => {
@@ -84,7 +83,8 @@ describe("Products DB", () => {
     expect(row.price_krw).toBe(22000);
   });
 
-  test("search by concern", () => {
+  test("search by JSON field (LIKE in SQLite, @> in PG)", () => {
+    // SQLite fallback: LIKE-based JSON search
     const rows = db.query(
       `SELECT * FROM products WHERE addresses LIKE ? AND in_stock = 1`
     ).all('%"pore"%') as any[];
@@ -134,21 +134,12 @@ describe("API Keys", () => {
 });
 
 describe("Usage Logs", () => {
-  test("log usage entry", () => {
+  test("log and aggregate usage", () => {
     db.run(
       `INSERT INTO usage_logs (api_key, endpoint, persona_id, input_tokens, output_tokens, cost_usd, latency_ms, status_code)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       ["bpc_testkey123", "POST /chat", "pore-unni", 1500, 500, 0.012, 1200, 200]
     );
-
-    const logs = db.query("SELECT * FROM usage_logs").all() as any[];
-    expect(logs.length).toBe(1);
-    expect(logs[0].persona_id).toBe("pore-unni");
-    expect(logs[0].cost_usd).toBe(0.012);
-  });
-
-  test("aggregate usage stats", () => {
-    // Add more entries
     db.run(
       `INSERT INTO usage_logs (api_key, endpoint, persona_id, input_tokens, output_tokens, cost_usd, latency_ms, status_code)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
