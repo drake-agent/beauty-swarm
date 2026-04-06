@@ -4,69 +4,139 @@ import { KnowledgeGraph } from "./knowledge/graph.js";
 import { PersonaRegistry } from "./persona/registry.js";
 import { ChatEngine } from "./chat/engine.js";
 import { PanelEngine } from "./chat/panel-engine.js";
-import { personasRoute } from "./api/personas.js";
 import { chatRoute } from "./api/chat.js";
 import { panelRoute } from "./api/panel.js";
 import { recommendRoute } from "./api/recommend.js";
+import { analyzeRoute } from "./api/analyze.js";
+import { usersRoute } from "./api/users.js";
+import { personasRoute } from "./api/personas.js";
+import { adminRoute } from "./api/admin.js";
+import { authMiddleware } from "./middleware/auth.js";
+import { rateLimitMiddleware } from "./middleware/rate-limit.js";
+import { getDb } from "./db/schema.js";
+import { seedProducts } from "./db/products.js";
+import { readFileSync } from "fs";
+import { join } from "path";
+import { parse } from "yaml";
 
 const app = new Hono();
 
-// Middleware
 app.use("*", cors());
 
-// Initialize core services
+// Initialize DB + seed
+getDb();
+seedProductsFromYaml();
+
+// Core services
 const graph = new KnowledgeGraph();
 const registry = new PersonaRegistry();
 const chatEngine = new ChatEngine(graph, registry);
 const panelEngine = new PanelEngine(graph, registry);
+const ADMIN_KEY = process.env.ADMIN_KEY || "admin_dev_key";
 
-// Health check
-app.get("/", (c) => {
-  return c.json({
-    name: "banila-persona-chat",
-    version: "0.1.0",
-    description: "Banilaco Multi-Persona AI Cosmetics Recommendation Chatbot",
-    disclaimer: "This is an AI-powered service. All personas are AI characters, not real people.",
+// =====================
+// PUBLIC (no auth)
+// =====================
+
+app.get("/", (c) =>
+  c.json({
+    name: "beauty-swarm",
+    version: "0.2.0",
+    disclaimer: "AI-powered service. All personas are AI characters.",
     endpoints: {
-      "GET /personas": "List all available personas",
-      "GET /personas/:id": "Get persona details",
-      "POST /chat": "1:1 chat with a persona",
-      "POST /panel": "Multi-persona panel discussion",
-      "POST /recommend": "Quick KG-based recommendation (no LLM)",
-      "POST /personas/generate": "Generate a new consumer persona from pain points (LLM)",
-      "GET /pain-points": "List all pain point categories",
+      public: ["GET /", "GET /personas", "GET /personas/:id", "GET /pain-points"],
+      authenticated: ["POST /chat", "POST /panel", "POST /recommend", "POST /analyze", "POST /personas/generate", "GET /users/me", "PATCH /users/me"],
+      admin: ["POST /admin/api-keys", "GET /admin/api-keys", "GET /admin/usage", "GET /admin/logs"],
     },
+  })
+);
+
+app.get("/personas", (c) =>
+  c.json({ personas: registry.list(), total: registry.list().length })
+);
+
+app.get("/personas/:id", (c) => {
+  const p = registry.get(c.req.param("id"));
+  if (!p) return c.json({ error: "Not found" }, 404);
+  return c.json({
+    id: p.id, name: p.name, role: p.role, avatar: p.avatar,
+    backstory: p.backstory, expertise: p.expertise, style: p.style,
+    pain_point_affinity: p.pain_point_affinity,
   });
 });
 
-// Pain points listing
-app.get("/pain-points", (c) => {
-  const painPoints = graph.getAllPainPoints();
-  return c.json({
-    categories: painPoints.map((pp) => ({
-      id: pp.id,
-      name: pp.name,
-      description: pp.description,
+app.get("/pain-points", (c) =>
+  c.json({
+    categories: graph.getAllPainPoints().map((pp) => ({
+      id: pp.id, name: pp.name, description: pp.description,
       variants: pp.variants.map((v) => ({ id: v.id, label: v.label })),
     })),
-  });
-});
+  })
+);
 
-// Routes
-app.route("/personas", personasRoute(registry, graph));
+// =====================
+// AUTHENTICATED (Bearer token)
+// =====================
+
+// Apply auth to all POST + /users/*
+app.use("/chat", authMiddleware, rateLimitMiddleware);
+app.use("/panel", authMiddleware, rateLimitMiddleware);
+app.use("/recommend", authMiddleware, rateLimitMiddleware);
+app.use("/analyze", authMiddleware, rateLimitMiddleware);
+app.use("/personas/generate", authMiddleware, rateLimitMiddleware);
+app.use("/users/*", authMiddleware, rateLimitMiddleware);
+
 app.route("/chat", chatRoute(chatEngine));
 app.route("/panel", panelRoute(panelEngine));
 app.route("/recommend", recommendRoute(graph, registry));
+app.route("/analyze", analyzeRoute(graph, registry));
+app.route("/users", usersRoute());
 
-// Start server
+// Persona generate (authed sub-route)
+const personaRouter = personasRoute(registry, graph);
+app.post("/personas/generate", async (c) => {
+  const url = new URL(c.req.url);
+  url.pathname = "/generate";
+  const req = new Request(url.toString(), {
+    method: c.req.method,
+    headers: c.req.raw.headers,
+    body: c.req.raw.body,
+  });
+  return personaRouter.fetch(req);
+});
+
+// =====================
+// ADMIN (separate auth in adminRoute)
+// =====================
+app.route("/admin", adminRoute(ADMIN_KEY));
+
+// =====================
+// Helpers
+// =====================
+
+function seedProductsFromYaml(): void {
+  try {
+    const dataDir = join(import.meta.dir ?? ".", "data");
+    const raw = parse(readFileSync(join(dataDir, "products.yaml"), "utf-8"));
+    seedProducts(
+      raw.products.map((p: any) => ({
+        ...p,
+        price_krw: p.price_krw || null,
+        hero_product: p.hero_product || false,
+        in_stock: true,
+        url: p.url || null,
+      }))
+    );
+  } catch {
+    console.warn("⚠️ Could not seed products (non-fatal)");
+  }
+}
+
 const PORT = parseInt(process.env.PORT || "3000", 10);
 
-export default {
-  port: PORT,
-  fetch: app.fetch,
-};
+export default { port: PORT, fetch: app.fetch };
 
-console.log(`🧴 Banila Persona Chat API running on http://localhost:${PORT}`);
-console.log(`📋 ${registry.list().length} personas loaded`);
-console.log(`🧬 ${graph.getAllPainPoints().length} pain point categories`);
-console.log(`🏷️  ${graph.getAllProducts().length} products in catalog`);
+console.log(`🧴 beauty-swarm v0.2.0 → http://localhost:${PORT}`);
+console.log(`📋 ${registry.list().length} personas | 🧬 ${graph.getAllPainPoints().length} concerns | 🏷️ ${graph.getAllProducts().length} products`);
+console.log(`🔐 Auth required for chat/panel/recommend/analyze`);
+console.log(`👑 Admin: POST /admin/api-keys (Bearer ${ADMIN_KEY.slice(0, 8)}...)`);
