@@ -1,38 +1,20 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { getAnthropicClient, parseLLMJson, ClassificationSchema } from "../llm/client.js";
+import type { z } from "zod";
 
 const CLASSIFY_MODEL = "claude-sonnet-4-20250514";
 
 const CLASSIFY_PROMPT = `사용자 메시지에서 피부 고민과 의도를 분석하세요.
 
 ## 가능한 피부 고민 카테고리
-- pore: 모공, 블랙헤드, 화이트헤드
-- dullness: 칙칙함, 누런 피부, 피부톤 불균일, 광채 부족
-- oiliness: 유분, 번들거림, T존 기름, 화장 무너짐
-- dryness: 건조, 당김, 각질, 수분 부족
-- sensitivity: 민감, 자극, 홍조, 장벽 손상
-- acne: 트러블, 여드름, 뾰루지
-- aging: 주름, 탄력, 안티에이징
-- pigmentation: 기미, 잡티, 색소침착, 여드름 자국
-- makeup-concern: 메이크업, 베이스, 클렌징, 화장 지속력
+- pore, dullness, oiliness, dryness, sensitivity, acne, aging, pigmentation, makeup-concern
 
 ## 가능한 의도
-- recommend: 제품 추천 요청
-- concern: 피부 고민 상담
-- routine: 루틴/사용법 질문
-- compare: 제품 비교
-- ingredient: 성분 관련 질문
-- general: 일반 인사/질문
+- recommend, concern, routine, compare, ingredient, general
 
 반드시 아래 JSON만 출력:
 {"concerns": ["concern_id", ...], "intent": "intent_type", "confidence": 0.0-1.0}`;
 
-let client: Anthropic | null = null;
-
-export interface ClassificationResult {
-  concerns: string[];
-  intent: string;
-  confidence: number;
-}
+export type ClassificationResult = z.infer<typeof ClassificationSchema>;
 
 export async function classifyIntent(
   message: string
@@ -45,7 +27,7 @@ export async function classifyIntent(
 
   // LLM classification for ambiguous messages
   try {
-    if (!client) client = new Anthropic();
+    const client = getAnthropicClient();
 
     const response = await client.messages.create({
       model: CLASSIFY_MODEL,
@@ -57,12 +39,8 @@ export async function classifyIntent(
     const text = response.content[0];
     if (text.type !== "text") throw new Error("No text response");
 
-    const jsonMatch = text.text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON in response");
-
-    return JSON.parse(jsonMatch[0]) as ClassificationResult;
+    return parseLLMJson(text.text, ClassificationSchema);
   } catch {
-    // Fallback to keyword if LLM fails
     return quickResult || { concerns: [], intent: "general", confidence: 0.3 };
   }
 }
@@ -104,17 +82,8 @@ function quickClassify(message: string): ClassificationResult | null {
     }
   }
 
-  if (concerns.length === 0 && intent === "general") {
-    return null; // Ambiguous — needs LLM
-  }
+  if (concerns.length === 0 && intent === "general") return null;
+  if (concerns.length > 0 && intent === "general") intent = "concern";
 
-  if (concerns.length > 0 && intent === "general") {
-    intent = "concern";
-  }
-
-  return {
-    concerns,
-    intent,
-    confidence: concerns.length > 0 ? 0.85 : 0.6,
-  };
+  return { concerns, intent, confidence: concerns.length > 0 ? 0.85 : 0.6 };
 }

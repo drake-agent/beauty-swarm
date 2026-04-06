@@ -112,7 +112,21 @@ export async function getUsageStats(options?: {
   };
 }
 
-export async function getRecentLogs(limit: number = 50): Promise<any[]> {
+export interface UsageLog {
+  id: number;
+  api_key: string | null;
+  endpoint: string;
+  persona_id: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  latency_ms: number;
+  status_code: number;
+  error: string | null;
+  created_at: string;
+}
+
+export async function getRecentLogs(limit: number = 50): Promise<UsageLog[]> {
   const pool = getPool();
   const { rows } = await pool.query(
     "SELECT * FROM usage_logs ORDER BY created_at DESC LIMIT $1",

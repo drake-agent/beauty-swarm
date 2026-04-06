@@ -9,7 +9,7 @@ export interface PanelRequest {
   persona_ids: string[];
   message: string;
   user_context?: UserContext;
-  include_summary?: boolean;
+  include_summary?: boolean; // [m12] defaults to false now
 }
 
 export interface PanelMember {
@@ -63,13 +63,13 @@ export class PanelEngine {
       }
     }
 
-    // Build contexts for each persona
+    // [M5] Build context once, reuse KG result for concern detection
+    // Only the system prompt differs per persona (due to persona template)
+    const firstCtx = buildChatContext(personas[0], request.message, this.graph);
+    const detectedConcerns = firstCtx.queryResult.painPoints.map((pp) => pp.id);
+
     const calls = personas.map((persona) => {
-      const { systemPrompt, queryResult } = buildChatContext(
-        persona,
-        request.message,
-        this.graph
-      );
+      const { systemPrompt } = buildChatContext(persona, request.message, this.graph);
       return {
         systemPrompt:
           systemPrompt +
@@ -78,14 +78,8 @@ export class PanelEngine {
       };
     });
 
-    // Parallel LLM calls
+    // Parallel LLM calls (bounded by semaphore in client.ts)
     const responses = await callLLMParallel(calls);
-
-    // Detect concerns from first persona's query (all will detect similar)
-    const queryResult = this.graph.queryByMessage(
-      request.message,
-      personas[0].graph_strategy
-    );
 
     let totalInput = 0;
     let totalOutput = 0;
@@ -104,9 +98,9 @@ export class PanelEngine {
       };
     });
 
-    // Generate summary if requested
+    // [m12] Summary defaults to false — explicit opt-in
     let summary: string | undefined;
-    if (request.include_summary !== false) {
+    if (request.include_summary === true) {
       const panelContent = panel
         .map((m) => `**${m.persona.name}** (${m.persona.role}):\n${m.message}`)
         .join("\n\n---\n\n");
@@ -125,7 +119,7 @@ export class PanelEngine {
     return {
       panel,
       summary,
-      detected_concerns: queryResult.painPoints.map((pp) => pp.id),
+      detected_concerns: detectedConcerns,
       usage: {
         total_input_tokens: totalInput,
         total_output_tokens: totalOutput,

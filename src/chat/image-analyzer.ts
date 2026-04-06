@@ -1,8 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { getAnthropicClient, parseLLMJson, SkinAnalysisSchema } from "../llm/client.js";
+import type { z } from "zod";
 
 const MODEL = "claude-sonnet-4-20250514";
-
-let client: Anthropic | null = null;
 
 const SKIN_ANALYSIS_PROMPT = `당신은 피부 상태를 분석하는 AI입니다.
 사용자가 보낸 피부/얼굴 사진을 보고 다음을 분석하세요.
@@ -29,19 +28,13 @@ pore, dullness, oiliness, dryness, sensitivity, acne, aging, pigmentation
 - 사진 품질이 낮으면 confidence를 낮게 반환
 - 피부 사진이 아닌 경우 "not_skin_image" 에러 반환`;
 
-export interface SkinAnalysisResult {
-  detected_concerns: string[];
-  skin_type_estimate: string;
-  severity: string;
-  key_observations: string[];
-  recommended_focus: string;
-}
+export type SkinAnalysisResult = z.infer<typeof SkinAnalysisSchema>;
 
 export async function analyzeSkinImage(
   imageBase64: string,
   mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif"
 ): Promise<SkinAnalysisResult> {
-  if (!client) client = new Anthropic();
+  const client = getAnthropicClient();
 
   const response = await client.messages.create({
     model: MODEL,
@@ -51,18 +44,8 @@ export async function analyzeSkinImage(
       {
         role: "user",
         content: [
-          {
-            type: "image",
-            source: {
-              type: "base64",
-              media_type: mediaType,
-              data: imageBase64,
-            },
-          },
-          {
-            type: "text",
-            text: "이 피부 사진을 분석해주세요.",
-          },
+          { type: "image", source: { type: "base64", media_type: mediaType, data: imageBase64 } },
+          { type: "text", text: "이 피부 사진을 분석해주세요." },
         ],
       },
     ],
@@ -71,16 +54,13 @@ export async function analyzeSkinImage(
   const text = response.content[0];
   if (text.type !== "text") throw new Error("No text response");
 
-  const jsonMatch = text.text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("Failed to parse analysis result");
-
-  return JSON.parse(jsonMatch[0]) as SkinAnalysisResult;
+  return parseLLMJson(text.text, SkinAnalysisSchema);
 }
 
 export async function analyzeSkinImageFromUrl(
   imageUrl: string
 ): Promise<SkinAnalysisResult> {
-  if (!client) client = new Anthropic();
+  const client = getAnthropicClient();
 
   const response = await client.messages.create({
     model: MODEL,
@@ -90,17 +70,8 @@ export async function analyzeSkinImageFromUrl(
       {
         role: "user",
         content: [
-          {
-            type: "image",
-            source: {
-              type: "url",
-              url: imageUrl,
-            },
-          },
-          {
-            type: "text",
-            text: "이 피부 사진을 분석해주세요.",
-          },
+          { type: "image", source: { type: "url", url: imageUrl } },
+          { type: "text", text: "이 피부 사진을 분석해주세요." },
         ],
       },
     ],
@@ -109,8 +80,5 @@ export async function analyzeSkinImageFromUrl(
   const text = response.content[0];
   if (text.type !== "text") throw new Error("No text response");
 
-  const jsonMatch = text.text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("Failed to parse analysis result");
-
-  return JSON.parse(jsonMatch[0]) as SkinAnalysisResult;
+  return parseLLMJson(text.text, SkinAnalysisSchema);
 }

@@ -52,6 +52,13 @@ export class ChatEngine {
       session = sessionStore.create(request.persona_id, request.user_context);
     }
 
+    // [m11] Validate session-persona match
+    if (session.personaId !== request.persona_id) {
+      throw new Error(
+        `Session ${session.id} belongs to persona "${session.personaId}", not "${request.persona_id}". Start a new session.`
+      );
+    }
+
     // LLM-based intent classification (hybrid: keyword fast path + LLM fallback)
     const classification = await classifyIntent(request.message);
 

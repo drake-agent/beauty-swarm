@@ -5,6 +5,10 @@ interface RateBucket {
   resetAt: number;
 }
 
+interface ApiKeyRow {
+  rate_limit_per_min: number;
+}
+
 const buckets = new Map<string, RateBucket>();
 
 // Cleanup stale buckets every 5 minutes
@@ -18,15 +22,15 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 export async function rateLimitMiddleware(c: Context, next: Next): Promise<Response | void> {
-  const apiKey = c.get("apiKey") as string;
-  const keyRow = c.get("apiKeyRow") as any;
+  const apiKey = c.get("apiKey") as string | undefined;
+  const keyRow = c.get("apiKeyRow") as ApiKeyRow | undefined;
 
   if (!apiKey) {
     await next();
     return;
   }
 
-  const limit = keyRow?.rate_limit_per_min || 30;
+  const limit = keyRow?.rate_limit_per_min ?? 30;
   const now = Date.now();
   const windowMs = 60 * 1000;
 
@@ -36,14 +40,11 @@ export async function rateLimitMiddleware(c: Context, next: Next): Promise<Respo
     buckets.set(apiKey, bucket);
   }
 
-  bucket.count++;
-
-  // Set rate limit headers
-  c.header("X-RateLimit-Limit", String(limit));
-  c.header("X-RateLimit-Remaining", String(Math.max(0, limit - bucket.count)));
-  c.header("X-RateLimit-Reset", String(Math.ceil(bucket.resetAt / 1000)));
-
-  if (bucket.count > limit) {
+  // [M2] Check limit BEFORE incrementing
+  if (bucket.count >= limit) {
+    c.header("X-RateLimit-Limit", String(limit));
+    c.header("X-RateLimit-Remaining", "0");
+    c.header("X-RateLimit-Reset", String(Math.ceil(bucket.resetAt / 1000)));
     return c.json(
       {
         error: "Rate limit exceeded",
@@ -53,6 +54,12 @@ export async function rateLimitMiddleware(c: Context, next: Next): Promise<Respo
       429
     );
   }
+
+  bucket.count++;
+
+  c.header("X-RateLimit-Limit", String(limit));
+  c.header("X-RateLimit-Remaining", String(limit - bucket.count));
+  c.header("X-RateLimit-Reset", String(Math.ceil(bucket.resetAt / 1000)));
 
   await next();
 }

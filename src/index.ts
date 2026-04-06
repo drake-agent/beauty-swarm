@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { bodyLimit } from "hono/body-limit";
 import { KnowledgeGraph } from "./knowledge/graph.js";
 import { PersonaRegistry } from "./persona/registry.js";
 import { ChatEngine } from "./chat/engine.js";
@@ -9,24 +10,43 @@ import { panelRoute } from "./api/panel.js";
 import { recommendRoute } from "./api/recommend.js";
 import { analyzeRoute } from "./api/analyze.js";
 import { usersRoute } from "./api/users.js";
-import { personasRoute } from "./api/personas.js";
 import { adminRoute } from "./api/admin.js";
+import { personasRoute } from "./api/personas.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { rateLimitMiddleware } from "./middleware/rate-limit.js";
 import { initSchema } from "./db/schema.js";
 import { seedProducts } from "./db/products.js";
+import {
+  generateAndSavePersona,
+  type GeneratePersonaRequest,
+} from "./persona/generator.js";
 import { readFileSync } from "fs";
-import { join } from "path";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 import { parse } from "yaml";
 
-const app = new Hono();
-app.use("*", cors());
+// [m10] Reliable __dirname equivalent
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Core services (sync — no DB needed)
+const app = new Hono();
+
+// [M3] CORS — restrict to known origins (allow all in dev)
+const ALLOWED_ORIGINS = process.env.CORS_ORIGINS?.split(",") ?? ["*"];
+app.use("*", cors({
+  origin: ALLOWED_ORIGINS.includes("*")
+    ? "*"
+    : (origin) => ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
+}));
+
+// [M6] Global body size limit: 15MB (for image uploads)
+app.use("*", bodyLimit({ maxSize: 15 * 1024 * 1024 }));
+
+// Core services
 const graph = new KnowledgeGraph();
 const registry = new PersonaRegistry();
 const chatEngine = new ChatEngine(graph, registry);
 const panelEngine = new PanelEngine(graph, registry);
+
 const ADMIN_KEY = process.env.ADMIN_KEY;
 if (!ADMIN_KEY) {
   console.error("❌ ADMIN_KEY environment variable is required");
@@ -40,14 +60,9 @@ if (!ADMIN_KEY) {
 app.get("/", (c) =>
   c.json({
     name: "beauty-swarm",
-    version: "0.3.0",
+    version: "0.4.0",
     disclaimer: "AI-powered service. All personas are AI characters.",
     db: "PostgreSQL",
-    endpoints: {
-      public: ["GET /", "GET /personas", "GET /personas/:id", "GET /pain-points"],
-      authenticated: ["POST /chat", "POST /panel", "POST /recommend", "POST /analyze", "POST /personas/generate", "GET /users/me", "PATCH /users/me"],
-      admin: ["POST /admin/api-keys", "GET /admin/api-keys", "GET /admin/usage", "GET /admin/logs"],
-    },
   })
 );
 
@@ -91,13 +106,30 @@ app.route("/recommend", recommendRoute(graph, registry));
 app.route("/analyze", analyzeRoute(graph, registry));
 app.route("/users", usersRoute());
 
-const personaRouter = personasRoute(registry, graph);
+// [m3] Direct persona generate handler — no sub-router forwarding hack
 app.post("/personas/generate", async (c) => {
-  const url = new URL(c.req.url);
-  url.pathname = "/generate";
-  return personaRouter.fetch(
-    new Request(url.toString(), { method: c.req.method, headers: c.req.raw.headers, body: c.req.raw.body })
-  );
+  const body = await c.req.json<GeneratePersonaRequest>();
+
+  if (!body.pain_points || body.pain_points.length === 0) {
+    return c.json({ error: "pain_points (array) required" }, 400);
+  }
+
+  try {
+    const profile = await generateAndSavePersona(body, graph);
+    registry.reload();
+
+    return c.json({
+      message: `New persona "${profile.name}" created!`,
+      persona: {
+        id: profile.id, name: profile.name, role: profile.role,
+        avatar: profile.avatar, backstory: profile.backstory,
+        pain_point_affinity: profile.pain_point_affinity,
+      },
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return c.json({ error: `Failed to generate persona: ${message}` }, 500);
+  }
 });
 
 // =====================
@@ -110,16 +142,14 @@ app.route("/admin", adminRoute(ADMIN_KEY));
 // =====================
 
 async function bootstrap(): Promise<void> {
-  // Init PostgreSQL schema
   await initSchema();
   console.log("✅ PostgreSQL schema initialized");
 
-  // Seed products from YAML
   try {
-    const dataDir = join(import.meta.dir ?? ".", "data");
+    const dataDir = join(__dirname, "data");
     const raw = parse(readFileSync(join(dataDir, "products.yaml"), "utf-8"));
     await seedProducts(
-      raw.products.map((p: any) => ({
+      raw.products.map((p: Record<string, unknown>) => ({
         ...p,
         price_krw: p.price_krw || null,
         hero_product: p.hero_product || false,
@@ -133,16 +163,14 @@ async function bootstrap(): Promise<void> {
   }
 }
 
-// Run bootstrap then start server
 const PORT = parseInt(process.env.PORT || "3000", 10);
 
 bootstrap().then(() => {
-  console.log(`🧴 beauty-swarm v0.3.0 → http://localhost:${PORT}`);
+  console.log(`🧴 beauty-swarm v0.4.0 → http://localhost:${PORT}`);
   console.log(`📋 ${registry.list().length} personas | 🧬 ${graph.getAllPainPoints().length} concerns | 🏷️ ${graph.getAllProducts().length} products`);
   console.log(`🐘 PostgreSQL | 🔐 Auth required | 👑 Admin key configured`);
 }).catch((err) => {
   console.error("❌ Bootstrap failed:", err.message);
-  console.error("   Make sure DATABASE_URL is set or PostgreSQL is running on localhost:5432/beauty_swarm");
   process.exit(1);
 });
 

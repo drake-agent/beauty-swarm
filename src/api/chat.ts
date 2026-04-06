@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import type { ChatEngine, ChatRequest } from "../chat/engine.js";
 import { logUsage } from "../monitoring/usage.js";
 
+const MAX_MESSAGE_LENGTH = 5000;
+
 export function chatRoute(engine: ChatEngine): Hono {
   const app = new Hono();
 
@@ -11,10 +13,12 @@ export function chatRoute(engine: ChatEngine): Hono {
     const body = await c.req.json<ChatRequest>();
 
     if (!body.persona_id || !body.message) {
-      return c.json(
-        { error: "persona_id and message are required" },
-        400
-      );
+      return c.json({ error: "persona_id and message are required" }, 400);
+    }
+
+    // [m7] Message length validation
+    if (body.message.length > MAX_MESSAGE_LENGTH) {
+      return c.json({ error: `Message too long. Max ${MAX_MESSAGE_LENGTH} characters.` }, 400);
     }
 
     try {
