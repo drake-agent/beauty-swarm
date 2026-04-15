@@ -8,6 +8,7 @@ import { Hono } from "hono";
 import type { ChatEngine } from "../chat/engine.js";
 import type { PersonaRegistry } from "../persona/registry.js";
 import { isValidGuardrailMode } from "../chat/guardrails.js";
+import { buildPlatformTonePrompt } from "../chat/platform-tone.js";
 import { logUsage } from "../monitoring/usage.js";
 import type { GuardrailMode } from "../chat/guardrails.js";
 
@@ -172,20 +173,22 @@ export function composeRoute(
       youtube: "YouTube",
     };
     const charLimit = PLATFORM_LIMITS[body.platform];
-    const lengthHint = body.platform === "twitter"
-      ? "트위터 답글이라 짧고 강하게 — 가능하면 200자 안쪽."
-      : `${platformLabel[body.platform]} 댓글 톤으로, 너무 길지 않게 (3-5문단 이내).`;
 
     const framedMessage =
-      `다음은 ${platformLabel[body.platform]}에서 본 글이에요. 이 글에 답글로 달 내용을 써주세요.\n` +
-      `${lengthHint}\n\n` +
+      `다음은 ${platformLabel[body.platform]}에서 본 글이에요. 이 글에 답글로 달 내용을 써주세요. ` +
+      `플랫폼 톤은 system prompt에 있는 "${platformLabel[body.platform]} 플랫폼 톤" 규칙을 따르세요.\n\n` +
       `--- 원본 글 ---\n${body.post_text}\n--- 끝 ---`;
+
+    // Inject platform-specific tone (opener/closer/emoji budget/examples) as
+    // extra_system — overrides humanize defaults for the target platform.
+    const platformTone = buildPlatformTonePrompt(body.platform);
 
     try {
       const chatResponse = await engine.chat({
         persona_id: personaId,
         message: framedMessage,
         guardrail_mode: body.guardrail_mode,
+        extra_system: platformTone,
       }, apiKey);
 
       const formatted = formatForPlatform(

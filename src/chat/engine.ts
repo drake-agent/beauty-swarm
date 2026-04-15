@@ -22,6 +22,7 @@ export interface ChatRequest {
   image_base64?: string;
   image_media_type?: string;
   guardrail_mode?: GuardrailMode; // overrides default per request (A/B testing)
+  extra_system?: string; // appended to system prompt (e.g. platform tone for /compose)
 }
 
 export interface ChatResponse {
@@ -104,12 +105,18 @@ export class ChatEngine {
     const guardrail = resolveGuardrail(mode, classification.intent);
 
     // Build context
-    const { systemPrompt, allowedProductNames } = buildChatContext(
+    let { systemPrompt, allowedProductNames } = buildChatContext(
       persona,
       request.message,
       this.graph,
       guardrail
     );
+
+    // Append per-request extra system prompt (e.g. platform tone from /compose).
+    // Placed AFTER humanize/guardrail so later instructions take precedence.
+    if (request.extra_system) {
+      systemPrompt += `\n\n${request.extra_system}`;
+    }
 
     // Enrich first message with user context from DB or request
     let enrichedMessage = request.message;
