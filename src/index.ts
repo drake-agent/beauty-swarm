@@ -108,7 +108,8 @@ app.use("/chat", authMiddleware, rateLimitMiddleware);
 app.use("/panel", authMiddleware, rateLimitMiddleware);
 app.use("/recommend", authMiddleware, rateLimitMiddleware);
 app.use("/analyze", authMiddleware, rateLimitMiddleware);
-app.use("/compose", authMiddleware, rateLimitMiddleware);
+// /compose intentionally has no auth — it's the human-in-the-loop UI
+// for personal/local use. Bind to localhost only in production deploys.
 app.use("/personas/generate", authMiddleware, rateLimitMiddleware);
 app.use("/users/*", authMiddleware, rateLimitMiddleware);
 
