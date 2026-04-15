@@ -91,14 +91,23 @@ export async function initSchema(): Promise<void> {
       latency_ms INTEGER NOT NULL DEFAULT 0,
       status_code INTEGER NOT NULL DEFAULT 200,
       error TEXT,
+      guardrail_mode TEXT,
+      guardrail_level TEXT,
+      intent TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  // Idempotent column adds for existing deploys
+  await p.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS guardrail_mode TEXT`);
+  await p.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS guardrail_level TEXT`);
+  await p.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS intent TEXT`);
 
   // Indexes
   await p.query(`CREATE INDEX IF NOT EXISTS idx_usage_api_key ON usage_logs(api_key)`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_usage_created ON usage_logs(created_at)`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_usage_endpoint ON usage_logs(endpoint)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_usage_guardrail ON usage_logs(guardrail_mode)`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_products_addresses ON products USING GIN(addresses)`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_products_ingredients ON products USING GIN(key_ingredients)`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_products_skin_type ON products USING GIN(skin_type_fit)`);

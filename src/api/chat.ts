@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { ChatEngine, ChatRequest } from "../chat/engine.js";
 import { logUsage } from "../monitoring/usage.js";
+import { isValidGuardrailMode } from "../chat/guardrails.js";
 
 const MAX_MESSAGE_LENGTH = 5000;
 
@@ -21,6 +22,11 @@ export function chatRoute(engine: ChatEngine): Hono {
       return c.json({ error: `Message too long. Max ${MAX_MESSAGE_LENGTH} characters.` }, 400);
     }
 
+    // Guardrail mode validation (optional override for A/B testing)
+    if (body.guardrail_mode !== undefined && !isValidGuardrailMode(body.guardrail_mode)) {
+      return c.json({ error: "guardrail_mode must be 'trust', 'brand', or 'hybrid'" }, 400);
+    }
+
     try {
       const response = await engine.chat(body, apiKey);
 
@@ -32,6 +38,9 @@ export function chatRoute(engine: ChatEngine): Hono {
         output_tokens: response.usage.output_tokens,
         latency_ms: Date.now() - start,
         status_code: 200,
+        guardrail_mode: response.guardrail.mode,
+        guardrail_level: response.guardrail.level,
+        intent: response.intent,
       });
 
       return c.json(response);

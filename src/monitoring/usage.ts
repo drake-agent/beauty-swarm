@@ -15,6 +15,9 @@ export interface UsageEntry {
   latency_ms: number;
   status_code: number;
   error?: string;
+  guardrail_mode?: string;
+  guardrail_level?: string;
+  intent?: string;
 }
 
 export function logUsage(entry: UsageEntry): void {
@@ -26,12 +29,13 @@ export function logUsage(entry: UsageEntry): void {
   // Fire-and-forget — don't block the response
   pool.query(
     `INSERT INTO usage_logs
-     (api_key, endpoint, persona_id, input_tokens, output_tokens, cost_usd, latency_ms, status_code, error)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+     (api_key, endpoint, persona_id, input_tokens, output_tokens, cost_usd, latency_ms, status_code, error, guardrail_mode, guardrail_level, intent)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
     [
       entry.api_key, entry.endpoint, entry.persona_id || null,
       entry.input_tokens, entry.output_tokens, cost,
       entry.latency_ms, entry.status_code, entry.error || null,
+      entry.guardrail_mode || null, entry.guardrail_level || null, entry.intent || null,
     ]
   ).catch((err) => {
     console.error("Failed to log usage:", err.message);

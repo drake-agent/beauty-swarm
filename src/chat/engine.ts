@@ -5,6 +5,14 @@ import { buildChatContext } from "./context-builder.js";
 import { classifyIntent } from "./intent-classifier.js";
 import { sessionStore, type UserContext } from "./session.js";
 import { getUserByApiKey } from "../db/users.js";
+import {
+  resolveGuardrail,
+  DEFAULT_GUARDRAIL_MODE,
+  isValidGuardrailMode,
+  type GuardrailMode,
+  type GuardrailLevel,
+} from "./guardrails.js";
+import { validateResponse, type HumanizeIssue } from "./humanizer.js";
 
 export interface ChatRequest {
   session_id?: string;
@@ -13,6 +21,7 @@ export interface ChatRequest {
   user_context?: UserContext;
   image_base64?: string;
   image_media_type?: string;
+  guardrail_mode?: GuardrailMode; // overrides default per request (A/B testing)
 }
 
 export interface ChatResponse {
@@ -25,6 +34,14 @@ export interface ChatResponse {
   message: string;
   detected_concerns: string[];
   intent: string;
+  guardrail: {
+    mode: GuardrailMode;
+    level: GuardrailLevel;
+  };
+  validation: {
+    passed: boolean;
+    issues: HumanizeIssue[];
+  };
   usage: {
     input_tokens: number;
     output_tokens: number;
@@ -80,11 +97,18 @@ export class ChatEngine {
         ? this.graph.queryByPainPoints([...allConcerns], persona.graph_strategy)
         : kgResult;
 
+    // Resolve guardrail (per-request override > env default)
+    const mode: GuardrailMode = isValidGuardrailMode(request.guardrail_mode)
+      ? request.guardrail_mode
+      : DEFAULT_GUARDRAIL_MODE;
+    const guardrail = resolveGuardrail(mode, classification.intent);
+
     // Build context
-    const { systemPrompt } = buildChatContext(
+    const { systemPrompt, allowedProductNames } = buildChatContext(
       persona,
       request.message,
-      this.graph
+      this.graph,
+      guardrail
     );
 
     // Enrich first message with user context from DB or request
@@ -112,6 +136,15 @@ export class ChatEngine {
     // Call LLM
     const response = await callLLM(systemPrompt, messages);
 
+    // Post-generation validation — flag AI patterns + hallucinated products
+    const validation = validateResponse(response.text, allowedProductNames);
+    if (!validation.passed) {
+      console.warn(
+        `[validation] persona=${persona.id} issues=${validation.issues.length}`,
+        validation.issues.map((i) => `${i.type}:${i.detail}`).join(", ")
+      );
+    }
+
     // Save enriched message (same as what LLM saw) for context continuity
     sessionStore.addMessage(session.id, {
       role: "user",
@@ -132,6 +165,8 @@ export class ChatEngine {
       message: response.text,
       detected_concerns: [...allConcerns],
       intent: classification.intent,
+      guardrail: { mode: guardrail.mode, level: guardrail.level },
+      validation,
       usage: response.usage,
     };
   }

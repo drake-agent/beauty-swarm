@@ -5,6 +5,8 @@ import { KnowledgeGraph } from "../knowledge/graph.js";
 import type { PersonaProfile } from "../persona/types.js";
 import type { GraphQueryResult } from "../knowledge/types.js";
 import { buildKnowledgeContext, buildSystemPrompt } from "../llm/prompts.js";
+import type { GuardrailDecision } from "./guardrails.js";
+import { HUMANIZE_RULES, buildProductFidelityPrompt } from "./humanizer.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -33,12 +35,14 @@ function loadBrandGuidelines(): string {
 export interface ChatContext {
   systemPrompt: string;
   queryResult: GraphQueryResult;
+  allowedProductNames: string[];
 }
 
 export function buildChatContext(
   persona: PersonaProfile,
   userMessage: string,
-  graph: KnowledgeGraph
+  graph: KnowledgeGraph,
+  guardrail?: GuardrailDecision
 ): ChatContext {
   const queryResult = graph.queryByMessage(
     userMessage,
@@ -47,12 +51,22 @@ export function buildChatContext(
 
   const knowledgeContext = buildKnowledgeContext(queryResult);
   const guidelines = loadBrandGuidelines();
+  const allowedProductNames = queryResult.products.map((p) => p.name);
+  const productFidelity = buildProductFidelityPrompt(allowedProductNames);
 
-  const systemPrompt = buildSystemPrompt(
+  let systemPrompt = buildSystemPrompt(
     persona.system_prompt_template,
     knowledgeContext,
     guidelines
   );
 
-  return { systemPrompt, queryResult };
+  // Always-on layers: humanize + product fidelity (appended after persona template)
+  systemPrompt += `\n\n${HUMANIZE_RULES}\n\n${productFidelity}`;
+
+  // Append guardrail instructions (if any) — last so they take precedence
+  if (guardrail && guardrail.prompt) {
+    systemPrompt += `\n\n${guardrail.prompt}`;
+  }
+
+  return { systemPrompt, queryResult, allowedProductNames };
 }

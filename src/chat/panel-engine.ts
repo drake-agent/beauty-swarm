@@ -2,14 +2,23 @@ import { KnowledgeGraph } from "../knowledge/graph.js";
 import { PersonaRegistry } from "../persona/registry.js";
 import { callLLM, callLLMParallel, type LLMMessage } from "../llm/client.js";
 import { buildChatContext } from "./context-builder.js";
+import { classifyIntent } from "./intent-classifier.js";
 import { PANEL_MODERATOR_PROMPT } from "../llm/prompts.js";
 import type { UserContext } from "./session.js";
+import {
+  resolveGuardrail,
+  DEFAULT_GUARDRAIL_MODE,
+  isValidGuardrailMode,
+  type GuardrailMode,
+  type GuardrailLevel,
+} from "./guardrails.js";
 
 export interface PanelRequest {
   persona_ids: string[];
   message: string;
   user_context?: UserContext;
   include_summary?: boolean; // [m12] defaults to false now
+  guardrail_mode?: GuardrailMode;
 }
 
 export interface PanelMember {
@@ -26,6 +35,11 @@ export interface PanelResponse {
   panel: PanelMember[];
   summary?: string;
   detected_concerns: string[];
+  intent: string;
+  guardrail: {
+    mode: GuardrailMode;
+    level: GuardrailLevel;
+  };
   usage: {
     total_input_tokens: number;
     total_output_tokens: number;
@@ -63,13 +77,20 @@ export class PanelEngine {
       }
     }
 
+    // Resolve guardrail (per-request override > env default) — needs intent
+    const classification = await classifyIntent(request.message);
+    const mode: GuardrailMode = isValidGuardrailMode(request.guardrail_mode)
+      ? request.guardrail_mode
+      : DEFAULT_GUARDRAIL_MODE;
+    const guardrail = resolveGuardrail(mode, classification.intent);
+
     // [M5] Build context once, reuse KG result for concern detection
     // Only the system prompt differs per persona (due to persona template)
-    const firstCtx = buildChatContext(personas[0], request.message, this.graph);
+    const firstCtx = buildChatContext(personas[0], request.message, this.graph, guardrail);
     const detectedConcerns = firstCtx.queryResult.painPoints.map((pp) => pp.id);
 
     const calls = personas.map((persona) => {
-      const { systemPrompt } = buildChatContext(persona, request.message, this.graph);
+      const { systemPrompt } = buildChatContext(persona, request.message, this.graph, guardrail);
       return {
         systemPrompt:
           systemPrompt +
@@ -120,6 +141,8 @@ export class PanelEngine {
       panel,
       summary,
       detected_concerns: detectedConcerns,
+      intent: classification.intent,
+      guardrail: { mode: guardrail.mode, level: guardrail.level },
       usage: {
         total_input_tokens: totalInput,
         total_output_tokens: totalOutput,

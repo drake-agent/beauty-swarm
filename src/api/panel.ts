@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { PanelEngine, PanelRequest } from "../chat/panel-engine.js";
 import { logUsage } from "../monitoring/usage.js";
+import { isValidGuardrailMode } from "../chat/guardrails.js";
 
 export function panelRoute(engine: PanelEngine): Hono {
   const app = new Hono();
@@ -21,6 +22,10 @@ export function panelRoute(engine: PanelEngine): Hono {
       );
     }
 
+    if (body.guardrail_mode !== undefined && !isValidGuardrailMode(body.guardrail_mode)) {
+      return c.json({ error: "guardrail_mode must be 'trust', 'brand', or 'hybrid'" }, 400);
+    }
+
     try {
       const response = await engine.discuss(body);
 
@@ -32,6 +37,9 @@ export function panelRoute(engine: PanelEngine): Hono {
         output_tokens: response.usage.total_output_tokens,
         latency_ms: Date.now() - start,
         status_code: 200,
+        guardrail_mode: response.guardrail.mode,
+        guardrail_level: response.guardrail.level,
+        intent: response.intent,
       });
 
       return c.json(response);

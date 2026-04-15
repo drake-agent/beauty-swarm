@@ -205,7 +205,7 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
   const selected = personas.find((p) => p.id === personaId);
 
   await menuInteraction.update({
-    content: `${selected?.avatar} **${selected?.name}** 연결됨! 이제 메시지를 보내면 ${selected?.name}이(가) 답해요.\n\n> *${selected?.backstory_summary}*\n\n💡 `!리셋`으로 페르소나 변경, `!패널 질문`으로 여러 명에게 물어볼 수 있어요.`,
+    content: `${selected?.avatar} **${selected?.name}** 연결됨! 이제 메시지를 보내면 ${selected?.name}이(가) 답해요.\n\n> *${selected?.backstory_summary}*\n\n💡 \`!리셋\`으로 페르소나 변경, \`!패널 질문\`으로 여러 명에게 물어볼 수 있어요.`,
     components: [],
   });
 });
