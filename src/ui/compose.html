@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>beauty-swarm · 답글 작성기</title>
+<style>
+  :root {
+    --pink: #f5c6d0;
+    --pink-deep: #e89aaa;
+    --bg: #faf8f7;
+    --ink: #2a2a2a;
+    --muted: #8a8a8a;
+    --line: #e5e0dd;
+    --warn: #c44;
+    --ok: #2a8;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    padding: 16px;
+    max-width: 640px;
+    margin-inline: auto;
+  }
+  h1 {
+    font-size: 18px; margin: 0 0 4px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tag {
+    font-size: 11px; color: var(--muted); font-weight: normal;
+    background: white; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line);
+  }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+
+  .field { margin-bottom: 14px; }
+  .label { font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  textarea, input, select {
+    width: 100%; padding: 12px; font-size: 15px;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: white; color: var(--ink); font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 100px; }
+  textarea:focus, input:focus, select:focus {
+    outline: none; border-color: var(--pink-deep);
+  }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 480px) { .row { grid-template-columns: 1fr; } }
+
+  .platforms { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .platforms button {
+    padding: 10px 4px; font-size: 13px; background: white;
+    border: 1px solid var(--line); border-radius: 10px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .platforms button.active {
+    background: var(--pink); border-color: var(--pink-deep); font-weight: 600;
+  }
+
+  .generate {
+    width: 100%; padding: 14px; font-size: 16px; font-weight: 600;
+    background: var(--ink); color: white; border: none; border-radius: 10px;
+    cursor: pointer; margin-top: 8px;
+  }
+  .generate:disabled { opacity: 0.4; cursor: wait; }
+
+  .output {
+    margin-top: 24px; padding: 16px; background: white;
+    border: 1px solid var(--line); border-radius: 12px;
+    display: none;
+  }
+  .output.show { display: block; }
+  .output-meta {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 12px; color: var(--muted); margin-bottom: 10px;
+  }
+  .output-meta strong { color: var(--ink); }
+  .reply {
+    white-space: pre-wrap; font-size: 15px; line-height: 1.6;
+    padding: 12px; background: var(--bg); border-radius: 8px; margin-bottom: 10px;
+  }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .actions button {
+    flex: 1; min-width: 100px; padding: 10px; font-size: 13px; font-weight: 500;
+    border: 1px solid var(--line); background: white; border-radius: 8px;
+    cursor: pointer;
+  }
+  .actions button.primary { background: var(--pink); border-color: var(--pink-deep); }
+  .actions button.copied { background: var(--ok); color: white; border-color: var(--ok); }
+
+  .thread { margin-top: 12px; }
+  .thread-item {
+    padding: 10px 12px; background: var(--bg); border-radius: 8px;
+    margin-bottom: 6px; font-size: 14px; white-space: pre-wrap;
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
+  }
+  .thread-item button {
+    flex-shrink: 0; padding: 4px 10px; font-size: 11px;
+    border: 1px solid var(--line); background: white; border-radius: 6px;
+    cursor: pointer;
+  }
+
+  .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .badge {
+    font-size: 10px; padding: 2px 7px; border-radius: 8px;
+    background: var(--bg); border: 1px solid var(--line); color: var(--muted);
+  }
+  .badge.warn { background: #fff3f3; color: var(--warn); border-color: #f4c2c2; }
+  .badge.ok { background: #f0faf6; color: var(--ok); border-color: #b8e0ce; }
+
+  .err {
+    margin-top: 16px; padding: 12px; background: #fff3f3; color: var(--warn);
+    border: 1px solid #f4c2c2; border-radius: 8px; font-size: 13px;
+  }
+
+  details { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  details pre {
+    background: var(--bg); padding: 10px; border-radius: 6px;
+    overflow-x: auto; font-size: 11px; margin-top: 6px;
+  }
+
+  .api-key-row { display: flex; gap: 8px; align-items: center; }
+  .api-key-row input { flex: 1; }
+  .api-key-row button {
+    padding: 12px 14px; font-size: 13px; background: white;
+    border: 1px solid var(--line); border-radius: 10px; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<h1>🧴 답글 작성기 <span class="tag">beauty-swarm</span></h1>
+<p class="sub">트위터·Reddit·Instagram·YouTube에서 본 글에 답변 초안을 만들어줘요. 검토 후 직접 복사해서 올리세요.</p>
+
+<div class="field">
+  <label class="label">API 키</label>
+  <div class="api-key-row">
+    <input type="password" id="apiKey" placeholder="bsk_..." autocomplete="off" />
+    <button onclick="saveKey()">저장</button>
+  </div>
+  <div class="hint">브라우저에만 저장됩니다 (localStorage). 서버로 안 보내요.</div>
+</div>
+
+<div class="field">
+  <label class="label">플랫폼</label>
+  <div class="platforms" id="platforms">
+    <button data-p="twitter" class="active">𝕏 Twitter</button>
+    <button data-p="reddit">Reddit</button>
+    <button data-p="instagram">IG</button>
+    <button data-p="youtube">YouTube</button>
+  </div>
+</div>
+
+<div class="field">
+  <label class="label">원본 글 (트윗·게시물·댓글)</label>
+  <textarea id="post" placeholder="여기에 트윗이나 게시물 내용을 붙여넣으세요"></textarea>
+  <div class="hint" id="postHint">자동으로 적절한 페르소나가 선택돼요.</div>
+</div>
+
+<div class="row">
+  <div class="field">
+    <label class="label">페르소나 (선택)</label>
+    <select id="persona">
+      <option value="">자동 감지</option>
+    </select>
+  </div>
+  <div class="field">
+    <label class="label">가드레일</label>
+    <select id="guardrail">
+      <option value="">기본 (hybrid)</option>
+      <option value="hybrid">hybrid</option>
+      <option value="brand">brand (강한 보호)</option>
+      <option value="trust">trust (가드레일 없음)</option>
+    </select>
+  </div>
+</div>
+
+<div class="field" id="threadField" style="display:none">
+  <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+    <input type="checkbox" id="thread" style="width:auto" />
+    280자 넘으면 스레드로 분할
+  </label>
+</div>
+
+<button class="generate" id="goBtn" onclick="generate()">답변 초안 만들기</button>
+
+<div id="err" class="err" style="display:none"></div>
+
+<div class="output" id="output">
+  <div class="output-meta">
+    <span><strong id="metaPersona">—</strong> · <span id="metaIntent">—</span></span>
+    <span id="metaCount">0 / 280</span>
+  </div>
+  <div class="reply" id="reply"></div>
+  <div class="actions">
+    <button class="primary" onclick="copy('reply')" id="copyBtn">📋 복사</button>
+    <button onclick="generate()">🔄 다시 만들기</button>
+  </div>
+  <div id="thread" class="thread"></div>
+  <div class="badges" id="badges"></div>
+  <details>
+    <summary>원본 LLM 출력</summary>
+    <pre id="raw"></pre>
+  </details>
+</div>
+
+<script>
+const API_BASE = "";
+let platform = "twitter";
+let lastReply = "";
+
+// Init: load API key, fetch personas
+document.getElementById("apiKey").value = localStorage.getItem("bsk") || "";
+fetch(API_BASE + "/personas")
+  .then(r => r.json())
+  .then(d => {
+    const sel = document.getElementById("persona");
+    d.personas.forEach(p => {
+      const o = document.createElement("option");
+      o.value = p.id;
+      o.textContent = `${p.avatar} ${p.name}`;
+      sel.appendChild(o);
+    });
+  })
+  .catch(() => {});
+
+// Platform toggle
+document.querySelectorAll("#platforms button").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll("#platforms button").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    platform = btn.dataset.p;
+    document.getElementById("threadField").style.display = platform === "twitter" ? "block" : "none";
+  };
+});
+
+function saveKey() {
+  const k = document.getElementById("apiKey").value.trim();
+  localStorage.setItem("bsk", k);
+  flash("저장됨", "ok");
+}
+
+function flash(msg, kind) {
+  const e = document.getElementById("err");
+  e.textContent = msg;
+  e.style.background = kind === "ok" ? "#f0faf6" : "#fff3f3";
+  e.style.color = kind === "ok" ? "var(--ok)" : "var(--warn)";
+  e.style.borderColor = kind === "ok" ? "#b8e0ce" : "#f4c2c2";
+  e.style.display = "block";
+  setTimeout(() => e.style.display = "none", 2000);
+}
+
+async function generate() {
+  const apiKey = document.getElementById("apiKey").value.trim();
+  const post = document.getElementById("post").value.trim();
+  const persona = document.getElementById("persona").value;
+  const guardrail = document.getElementById("guardrail").value;
+  const thread = document.getElementById("thread").checked;
+
+  if (!apiKey) { flash("API 키를 먼저 입력해주세요"); return; }
+  if (!post) { flash("원본 글을 붙여넣어 주세요"); return; }
+
+  const btn = document.getElementById("goBtn");
+  btn.disabled = true;
+  btn.textContent = "생성 중...";
+  document.getElementById("err").style.display = "none";
+
+  try {
+    const body = { platform, post_text: post };
+    if (persona) body.persona_id = persona;
+    if (guardrail) body.guardrail_mode = guardrail;
+    if (platform === "twitter" && thread) body.thread_split = true;
+
+    const res = await fetch(API_BASE + "/compose", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + apiKey,
+      },
+      body: JSON.stringify(body),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "요청 실패");
+
+    renderOutput(data);
+  } catch (e) {
+    flash(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "답변 초안 만들기";
+  }
+}
+
+function renderOutput(d) {
+  document.getElementById("output").classList.add("show");
+  document.getElementById("metaPersona").textContent = `${d.persona.avatar} ${d.persona.name}`;
+  document.getElementById("metaIntent").textContent = `intent: ${d.intent}`;
+  document.getElementById("metaCount").textContent = `${d.char_count} / ${d.char_limit}`;
+  document.getElementById("metaCount").style.color =
+    d.char_count > d.char_limit ? "var(--warn)" : "var(--muted)";
+
+  document.getElementById("reply").textContent = d.reply;
+  lastReply = d.reply;
+
+  // Thread
+  const threadDiv = document.getElementById("thread");
+  threadDiv.innerHTML = "";
+  if (d.thread && d.thread.length > 1) {
+    d.thread.forEach((t, i) => {
+      const row = document.createElement("div");
+      row.className = "thread-item";
+      row.innerHTML = `<span>${escapeHtml(t)}</span>`;
+      const cp = document.createElement("button");
+      cp.textContent = "복사";
+      cp.onclick = () => navigator.clipboard.writeText(t).then(() => { cp.textContent = "✓"; setTimeout(() => cp.textContent = "복사", 1500); });
+      row.appendChild(cp);
+      threadDiv.appendChild(row);
+    });
+  }
+
+  // Badges
+  const b = document.getElementById("badges");
+  b.innerHTML = "";
+  addBadge(b, `guardrail: ${d.guardrail.mode}/${d.guardrail.level}`);
+  d.detected_concerns.forEach(c => addBadge(b, c));
+  if (!d.validation.passed) {
+    addBadge(b, `⚠ validation issues: ${d.validation.issue_count}`, "warn");
+  } else {
+    addBadge(b, "✓ validated", "ok");
+  }
+
+  document.getElementById("raw").textContent = d.raw_message;
+  document.getElementById("output").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function addBadge(parent, text, kind) {
+  const el = document.createElement("span");
+  el.className = "badge" + (kind ? " " + kind : "");
+  el.textContent = text;
+  parent.appendChild(el);
+}
+
+function copy(id) {
+  navigator.clipboard.writeText(lastReply).then(() => {
+    const btn = document.getElementById("copyBtn");
+    btn.classList.add("copied");
+    btn.textContent = "✓ 복사됨";
+    setTimeout(() => {
+      btn.classList.remove("copied");
+      btn.textContent = "📋 복사";
+    }, 1500);
+  });
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+</script>
+</body>
+</html>

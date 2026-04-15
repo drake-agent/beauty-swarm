@@ -12,6 +12,7 @@ import { analyzeRoute } from "./api/analyze.js";
 import { usersRoute } from "./api/users.js";
 import { adminRoute } from "./api/admin.js";
 import { personasRoute } from "./api/personas.js";
+import { composeRoute } from "./api/compose.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { rateLimitMiddleware } from "./middleware/rate-limit.js";
 import { initSchema } from "./db/schema.js";
@@ -70,6 +71,16 @@ app.get("/personas", (c) =>
   c.json({ personas: registry.list(), total: registry.list().length })
 );
 
+// [ui] Serve the compose UI page (no auth — page itself is public; POST /compose still requires key)
+app.get("/ui", (c) => {
+  try {
+    const html = readFileSync(join(__dirname, "ui", "compose.html"), "utf-8");
+    return c.html(html);
+  } catch {
+    return c.json({ error: "UI not found" }, 404);
+  }
+});
+
 app.get("/personas/:id", (c) => {
   const p = registry.get(c.req.param("id"));
   if (!p) return c.json({ error: "Not found" }, 404);
@@ -97,6 +108,7 @@ app.use("/chat", authMiddleware, rateLimitMiddleware);
 app.use("/panel", authMiddleware, rateLimitMiddleware);
 app.use("/recommend", authMiddleware, rateLimitMiddleware);
 app.use("/analyze", authMiddleware, rateLimitMiddleware);
+app.use("/compose", authMiddleware, rateLimitMiddleware);
 app.use("/personas/generate", authMiddleware, rateLimitMiddleware);
 app.use("/users/*", authMiddleware, rateLimitMiddleware);
 
@@ -104,6 +116,7 @@ app.route("/chat", chatRoute(chatEngine));
 app.route("/panel", panelRoute(panelEngine));
 app.route("/recommend", recommendRoute(graph, registry));
 app.route("/analyze", analyzeRoute(graph, registry));
+app.route("/compose", composeRoute(chatEngine, registry));
 app.route("/users", usersRoute());
 
 // [m3] Direct persona generate handler — no sub-router forwarding hack
