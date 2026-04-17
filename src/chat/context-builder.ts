@@ -38,16 +38,22 @@ export interface ChatContext {
   allowedProductNames: string[];
 }
 
+/**
+ * [BUG-6/STRUCT-5] Optional `precomputedQueryResult` lets callers pass an
+ * already-queried KG result (merged with LLM-classified concerns) so we don't
+ * re-query here with a narrower keyword-only view. When omitted, we fall back
+ * to the keyword query for convenience.
+ */
 export function buildChatContext(
   persona: PersonaProfile,
   userMessage: string,
   graph: KnowledgeGraph,
-  guardrail?: GuardrailDecision
+  guardrail?: GuardrailDecision,
+  precomputedQueryResult?: GraphQueryResult
 ): ChatContext {
-  const queryResult = graph.queryByMessage(
-    userMessage,
-    persona.graph_strategy
-  );
+  const queryResult =
+    precomputedQueryResult ??
+    graph.queryByMessage(userMessage, persona.graph_strategy);
 
   const knowledgeContext = buildKnowledgeContext(queryResult);
   const guidelines = loadBrandGuidelines();

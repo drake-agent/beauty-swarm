@@ -119,17 +119,30 @@ export function detectHallucinatedProducts(
   // of likely product-name tokens (Korean + spaces).
   const PRODUCT_MENTION = /바닐라코[의]?\s+([가-힣A-Za-z0-9][가-힣A-Za-z0-9\s]{1,20}?)(?=[\s.,!?의을를이가은는와과에서로]|$)/g;
 
+  // [BUG-5] Prefix match — catches "공식몰", "공식 사이트", "고객센터" etc.
+  // which the guardrail prompt itself endorses ("바닐라코 공식몰에서 확인하세요")
+  // and would otherwise be flagged as hallucinated products.
+  const categoryPrefixes = [
+    "제품", "라인", "공식", "고객", "브랜드", "쿠션", "파운데", "토너",
+    "세럼", "크림", "클렌징", "팩", "매장", "몰", "샵", "사이트",
+  ];
+  // [PERF-8] Hoist the spread outside the loop.
+  const allowedArr = [...allowed];
+
+  // [SEC-5] Defensive cap against pathological inputs.
+  const MAX_MATCHES = 50;
+  let iterations = 0;
   let m: RegExpExecArray | null;
-  while ((m = PRODUCT_MENTION.exec(text)) !== null) {
+  while ((m = PRODUCT_MENTION.exec(text)) !== null && iterations < MAX_MATCHES) {
+    iterations++;
     const candidate = m[1].trim();
 
-    // Skip if it's a category word, not a product name
-    const categoryWords = ["제품", "라인", "공식", "브랜드", "쿠션", "파운데", "토너", "세럼", "크림", "클렌징", "팩"];
-    if (categoryWords.some((w) => candidate === w)) continue;
+    // Skip category/generic words the brand guardrail itself endorses.
+    if (categoryPrefixes.some((w) => candidate.startsWith(w))) continue;
 
     // Check against allow-list (substring match in either direction)
     const candidateLower = candidate.toLowerCase();
-    const isAllowed = [...allowed].some(
+    const isAllowed = allowedArr.some(
       (a) => a.includes(candidateLower) || candidateLower.includes(a)
     );
 

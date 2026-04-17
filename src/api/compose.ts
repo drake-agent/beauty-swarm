@@ -65,10 +65,12 @@ function autoDetectPersona(text: string, fallback: string): string {
 
 // Twitter thread splitter — splits at sentence boundaries, adds (1/n) markers
 export function splitForTwitter(text: string, limit: number = 270): string[] {
-  if (text.length <= limit) return [text];
+  const trimmedInput = text.trim();
+  if (trimmedInput.length === 0) return [];
+  if (trimmedInput.length <= limit) return [trimmedInput];
 
   // Split by sentence-end punctuation while preserving them
-  const sentences = text.match(/[^.!?。！？\n]+[.!?。！？\n]?/g) ?? [text];
+  const sentences = trimmedInput.match(/[^.!?。！？\n]+[.!?。！？\n]?/g) ?? [trimmedInput];
 
   const chunks: string[] = [];
   let current = "";
@@ -77,11 +79,12 @@ export function splitForTwitter(text: string, limit: number = 270): string[] {
     if ((current + sentence).length <= limit) {
       current += sentence;
     } else {
-      if (current) chunks.push(current.trim());
+      if (current.trim()) chunks.push(current.trim());
       // If a single sentence exceeds limit, hard-split
       if (sentence.length > limit) {
         for (let i = 0; i < sentence.length; i += limit) {
-          chunks.push(sentence.slice(i, i + limit).trim());
+          const piece = sentence.slice(i, i + limit).trim();
+          if (piece) chunks.push(piece);
         }
         current = "";
       } else {
@@ -91,9 +94,15 @@ export function splitForTwitter(text: string, limit: number = 270): string[] {
   }
   if (current.trim()) chunks.push(current.trim());
 
+  // [BUG-4] Filter any empties that slipped through (whitespace-only input,
+  // trimmed-to-zero slices, etc.) — otherwise we'd emit " (1/2)" with no body.
+  const nonEmpty = chunks.filter((c) => c.length > 0);
+  if (nonEmpty.length === 0) return [];
+  if (nonEmpty.length === 1) return nonEmpty;
+
   // Add (1/n) markers — accounting for the marker itself in the budget
-  const total = chunks.length;
-  return chunks.map((c, i) => {
+  const total = nonEmpty.length;
+  return nonEmpty.map((c, i) => {
     const marker = ` (${i + 1}/${total})`;
     const room = limit - marker.length;
     const trimmed = c.length > room ? c.slice(0, room - 1) + "…" : c;

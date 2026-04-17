@@ -84,13 +84,23 @@ export class PanelEngine {
       : DEFAULT_GUARDRAIL_MODE;
     const guardrail = resolveGuardrail(mode, classification.intent);
 
-    // [M5] Build context once, reuse KG result for concern detection
-    // Only the system prompt differs per persona (due to persona template)
-    const firstCtx = buildChatContext(personas[0], request.message, this.graph, guardrail);
-    const detectedConcerns = firstCtx.queryResult.painPoints.map((pp) => pp.id);
+    // [BUG-6/STRUCT-5] Compute KG result once with LLM-classified concerns merged.
+    const kgResult = this.graph.queryByMessage(request.message, personas[0].graph_strategy);
+    const mergedConcerns = new Set([
+      ...kgResult.painPoints.map((pp) => pp.id),
+      ...classification.concerns,
+    ]);
+    const queryResult =
+      mergedConcerns.size > kgResult.painPoints.length
+        ? this.graph.queryByPainPoints([...mergedConcerns], personas[0].graph_strategy)
+        : kgResult;
+    // [BUG-11] Merge KG + LLM concerns (engine.ts already does this; /panel was
+    // dropping LLM-only concerns from the response).
+    const detectedConcerns = [...mergedConcerns];
 
     const calls = personas.map((persona) => {
-      const { systemPrompt } = buildChatContext(persona, request.message, this.graph, guardrail);
+      // Reuse the queryResult so we don't re-query per-persona.
+      const { systemPrompt } = buildChatContext(persona, request.message, this.graph, guardrail, queryResult);
       return {
         systemPrompt:
           systemPrompt +

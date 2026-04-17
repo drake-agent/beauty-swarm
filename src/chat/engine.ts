@@ -70,10 +70,30 @@ export class ChatEngine {
       session = sessionStore.create(request.persona_id, request.user_context);
     }
 
+    // [BUG-1] Serialize all work for this session so concurrent requests
+    // can't interleave user/assistant writes and scramble the transcript.
+    return sessionStore.withLock(session.id, () => this.runChat(request, session!, persona, apiKey));
+  }
+
+  private async runChat(
+    request: ChatRequest,
+    session: import("./session.js").Session,
+    persona: import("../persona/types.js").PersonaProfile,
+    apiKey?: string
+  ): Promise<ChatResponse> {
+
     // [m11] Validate session-persona match
     if (session.personaId !== request.persona_id) {
       throw new Error(
         `Session ${session.id} belongs to persona "${session.personaId}", not "${request.persona_id}". Start a new session.`
+      );
+    }
+
+    // [BUG-3] Warn caller when a requested session_id didn't resolve — they
+    // think the conversation is continuing but it silently reset.
+    if (request.session_id && request.session_id !== session.id) {
+      console.warn(
+        `[session] stale session_id=${request.session_id} — starting new session=${session.id}`
       );
     }
 
@@ -104,12 +124,15 @@ export class ChatEngine {
       : DEFAULT_GUARDRAIL_MODE;
     const guardrail = resolveGuardrail(mode, classification.intent);
 
-    // Build context
+    // [BUG-6] Pass the merged queryResult so buildChatContext doesn't re-run
+    // a narrower KG query that would drop LLM-classified concerns from the
+    // allow-list.
     let { systemPrompt, allowedProductNames } = buildChatContext(
       persona,
       request.message,
       this.graph,
-      guardrail
+      guardrail,
+      queryResult
     );
 
     // Append per-request extra system prompt (e.g. platform tone from /compose).

@@ -51,10 +51,13 @@ export async function analyzeSkinImage(
     ],
   });
 
-  const text = response.content[0];
-  if (text.type !== "text") throw new Error("No text response");
-
-  return parseLLMJson(text.text, SkinAnalysisSchema);
+  // [BUG-7] Find first text block — LLM may return empty content on safety
+  // refusals, or text may not be at index 0 if thinking blocks are enabled.
+  const textBlock = response.content.find((b) => b.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("Image analysis returned no text — possibly refused by safety filter");
+  }
+  return parseLLMJson(textBlock.text, SkinAnalysisSchema);
 }
 
 export async function analyzeSkinImageFromUrl(
@@ -77,8 +80,11 @@ export async function analyzeSkinImageFromUrl(
     ],
   });
 
-  const text = response.content[0];
-  if (text.type !== "text") throw new Error("No text response");
-
-  return parseLLMJson(text.text, SkinAnalysisSchema);
+  // [BUG-7] Find first text block — LLM may return empty content on safety
+  // refusals, or text may not be at index 0 if thinking blocks are enabled.
+  const textBlock = response.content.find((b) => b.type === "text");
+  if (!textBlock || textBlock.type !== "text") {
+    throw new Error("Image analysis returned no text — possibly refused by safety filter");
+  }
+  return parseLLMJson(textBlock.text, SkinAnalysisSchema);
 }
