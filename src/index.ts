@@ -17,7 +17,7 @@ import { composeRoute } from "./api/compose.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { rateLimitMiddleware } from "./middleware/rate-limit.js";
 import { ipRateLimit } from "./middleware/ip-rate-limit.js";
-import { initSchema } from "./db/schema.js";
+import { initSchema, getPool } from "./db/schema.js";
 import { seedProducts } from "./db/products.js";
 import {
   generateAndSavePersona,
@@ -184,22 +184,38 @@ async function bootstrap(): Promise<void> {
   await initSchema();
   console.log("✅ PostgreSQL schema initialized");
 
+  // [ARCH-2] PG is the authoritative source for products. YAML is a first-run
+  // seed only — on subsequent boots we do NOT overwrite PG, so operator edits
+  // (품절 토글, 가격 변경, 신제품) survive redeploy.
   try {
-    const dataDir = join(__dirname, "data");
-    const raw = parse(readFileSync(join(dataDir, "products.yaml"), "utf-8"));
-    await seedProducts(
-      raw.products.map((p: Record<string, unknown>) => ({
-        ...p,
-        price_krw: p.price_krw || null,
-        hero_product: p.hero_product || false,
-        in_stock: true,
-        url: p.url || null,
-      }))
+    const { rows } = await getPool().query<{ c: string }>(
+      "SELECT COUNT(*)::text AS c FROM products"
     );
-    console.log(`✅ Seeded ${raw.products.length} products`);
+    const count = parseInt(rows[0]?.c ?? "0", 10);
+
+    if (count === 0) {
+      const dataDir = join(__dirname, "data");
+      const raw = parse(readFileSync(join(dataDir, "products.yaml"), "utf-8"));
+      await seedProducts(
+        raw.products.map((p: Record<string, unknown>) => ({
+          ...p,
+          price_krw: p.price_krw || null,
+          hero_product: p.hero_product || false,
+          in_stock: true,
+          url: p.url || null,
+        }))
+      );
+      console.log(`✅ First-run seed: ${raw.products.length} products from YAML → PG`);
+    } else {
+      console.log(`ℹ️  PG has ${count} products — skipping YAML seed (PG authoritative)`);
+    }
   } catch (err) {
     console.warn("⚠️ Could not seed products:", (err as Error).message);
   }
+
+  // Load products from PG into the graph + start 60s refresh.
+  await graph.initProducts();
+  console.log(`✅ Graph loaded ${graph.getAllProducts().length} products from PG`);
 }
 
 const PORT = parseInt(process.env.PORT || "3000", 10);

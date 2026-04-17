@@ -9,19 +9,28 @@ import type {
   GraphConnection,
   GraphStrategy,
 } from "./types.js";
+import { getAllProducts as getAllProductsFromDb } from "../db/products.js";
 
 const DATA_DIR = join(import.meta.dir ?? new URL(".", import.meta.url).pathname, "..", "data");
+
+// [ARCH-2] Product refresh cadence. Low enough that operator edits to PG
+// (품절 토글, 가격 변경, 신제품 추가) propagate within a minute without a restart.
+// Pain-points + ingredients stay in YAML — those are domain schema, not inventory.
+const PRODUCT_REFRESH_MS = 60_000;
 
 export class KnowledgeGraph {
   private painPoints: PainPointCategory[] = [];
   private ingredients: Map<string, Ingredient> = new Map();
   private products: Map<string, Product> = new Map();
+  private refreshHandle: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
-    this.load();
+    this.loadStatic();
+    this.loadProductsFromYaml();
   }
 
-  private load(): void {
+  // Pain-points + ingredients come from YAML and don't change at runtime.
+  private loadStatic(): void {
     const ppRaw = parse(readFileSync(join(DATA_DIR, "pain-points.yaml"), "utf-8"));
     this.painPoints = ppRaw.categories;
 
@@ -29,10 +38,79 @@ export class KnowledgeGraph {
     for (const ing of ingRaw.ingredients) {
       this.ingredients.set(ing.id, ing);
     }
+  }
 
-    const prodRaw = parse(readFileSync(join(DATA_DIR, "products.yaml"), "utf-8"));
-    for (const prod of prodRaw.products) {
-      this.products.set(prod.id, prod);
+  /**
+   * Synchronous YAML fallback — used at construct time so tests / dev without
+   * PG still have products. Production replaces these with PG data during
+   * bootstrap via initProducts().
+   */
+  private loadProductsFromYaml(): void {
+    try {
+      const prodRaw = parse(readFileSync(join(DATA_DIR, "products.yaml"), "utf-8"));
+      const next = new Map<string, Product>();
+      for (const prod of prodRaw.products) {
+        next.set(prod.id, prod);
+      }
+      this.products = next;
+    } catch {
+      // YAML missing is fine — initProducts() will fill from PG.
+    }
+  }
+
+  /**
+   * [ARCH-2] Load products from PG (authoritative source) and start a
+   * periodic refresh. Call once during bootstrap after initSchema + optional
+   * first-run seeding.
+   */
+  async initProducts(): Promise<void> {
+    await this.refreshProducts();
+    this.refreshHandle = setInterval(() => {
+      this.refreshProducts().catch((e) => {
+        console.error("[graph] product refresh failed:", (e as Error).message);
+      });
+    }, PRODUCT_REFRESH_MS);
+    // Don't block process exit on the refresh timer.
+    if (this.refreshHandle && "unref" in this.refreshHandle) {
+      (this.refreshHandle as unknown as { unref: () => void }).unref();
+    }
+  }
+
+  /**
+   * Re-read products from PG and atomically swap the in-memory map.
+   * Only products with `in_stock = TRUE` are exposed to the chat engine —
+   * toggling `in_stock = FALSE` in PG removes a product from recommendations
+   * within one refresh tick.
+   */
+  async refreshProducts(): Promise<void> {
+    const rows = await getAllProductsFromDb();
+    const next = new Map<string, Product>();
+    for (const r of rows) {
+      next.set(r.id, {
+        id: r.id,
+        name: r.name,
+        name_en: r.name_en,
+        line: r.line,
+        category: r.category,
+        routine_step: r.routine_step,
+        description: r.description,
+        key_ingredients: r.key_ingredients,
+        addresses: r.addresses,
+        skin_type_fit: r.skin_type_fit,
+        price_range: r.price_range as Product["price_range"],
+        size_ml: r.size_ml,
+        hero_product: r.hero_product,
+        tagline: r.tagline,
+      });
+    }
+    this.products = next;
+  }
+
+  /** Stop the refresh timer — call during graceful shutdown or tests. */
+  stopRefresh(): void {
+    if (this.refreshHandle) {
+      clearInterval(this.refreshHandle);
+      this.refreshHandle = null;
     }
   }
 
@@ -74,12 +152,15 @@ export class KnowledgeGraph {
         });
       }
       for (const prodId of pp.related_products) {
-        productIds.add(prodId);
-        connections.push({
-          from: { type: "pain-point", id: pp.id },
-          to: { type: "product", id: prodId },
-          relation: "recommended_product",
-        });
+        // Only add if the product is currently in-stock (present in map).
+        if (this.products.has(prodId)) {
+          productIds.add(prodId);
+          connections.push({
+            from: { type: "pain-point", id: pp.id },
+            to: { type: "product", id: prodId },
+            relation: "recommended_product",
+          });
+        }
       }
     }
 
@@ -159,7 +240,7 @@ export class KnowledgeGraph {
   ): GraphQueryResult {
     const detected = this.detectPainPoints(userMessage);
     if (detected.length === 0) {
-      // Fallback: return hero products
+      // Fallback: return hero products (still filtered by in-stock via map).
       const heroProducts = [...this.products.values()].filter(
         (p) => p.hero_product
       );

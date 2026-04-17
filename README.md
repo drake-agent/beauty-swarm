@@ -190,12 +190,19 @@ bun run bot:discord
 
 `usage_logs`에 `guardrail_mode`, `guardrail_level`, `intent` 컬럼 저장. Admin 엔드포인트로 모드별 응답 품질·길이·에러율 비교 가능.
 
+## Product Inventory (PG-authoritative)
+
+- **Pain-points / ingredients**: YAML (`src/data/pain-points.yaml`, `ingredients.yaml`) — domain schema, changes require redeploy
+- **Products**: PostgreSQL `products` table — authoritative. YAML (`products.yaml`) is a **first-run seed only** (skipped when table is non-empty).
+- Operator edits in PG (`UPDATE products SET in_stock = FALSE WHERE id = '...'`, price changes, new SKUs) propagate to the chat engine within **~60 seconds** (in-memory cache refresh).
+- Products with `in_stock = FALSE` are excluded from the allow-list and recommendations.
+
 ## Stack
 
 - **Runtime**: Bun
 - **Framework**: Hono
-- **DB**: PostgreSQL (users, api_keys, usage_logs)
+- **DB**: PostgreSQL (users, api_keys, usage_logs, products)
 - **LLM**: Claude Sonnet 4 (Anthropic SDK)
-- **Data**: YAML → In-memory Knowledge Graph
-- **Auth**: Bearer API keys + admin key
+- **Data**: YAML (schema) + PG (inventory) → in-memory Knowledge Graph with 60s refresh
+- **Auth**: Bearer API keys (sha256-hashed) + admin key (timing-safe)
 - **Connectors**: REST, Web UI, Discord
