@@ -4,7 +4,10 @@ import { z } from "zod";
 const MODEL = "claude-sonnet-4-20250514";
 const MAX_TOKENS = 4096;
 const TIMEOUT_MS = 60_000;
-const MAX_CONCURRENT_LLM_CALLS = 6; // [M10] panel concurrency limit
+// [PERF-2] Process-global concurrency cap for LLM calls. 6 was too tight —
+// a single /panel with 4 personas + one concurrent /chat = 5 slots already
+// in use. Override via env for tier-specific tuning.
+const MAX_CONCURRENT_LLM_CALLS = parseInt(process.env.MAX_CONCURRENT_LLM_CALLS ?? "20", 10);
 
 // [M9] Singleton Anthropic client — shared across all modules
 let client: Anthropic | null = null;

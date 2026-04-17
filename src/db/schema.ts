@@ -10,9 +10,12 @@ export function getPool(): pg.Pool {
       process.env.DATABASE_URL ||
       "postgresql://localhost:5432/beauty_swarm";
 
+    // [PERF-3] Pool max 10 bottlenecked around 30 RPS (~3 queries/request).
+    // 50 gives headroom for auth + logUsage + getUserByApiKey in parallel.
+    // Override via DB_POOL_MAX env for deployment tuning.
     pool = new Pool({
       connectionString,
-      max: 10,
+      max: parseInt(process.env.DB_POOL_MAX ?? "50", 10),
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
     });

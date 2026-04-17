@@ -12,21 +12,26 @@ export class PersonaRegistry {
   private personas: Map<string, PersonaProfile> = new Map();
 
   constructor() {
-    this.loadAll();
+    this.personas = this.buildMap();
   }
 
-  private loadAll(): void {
+  // [ARCH-6] Build into a fresh Map and return — never mutate the live one.
+  // Callers (constructor, reload) swap atomically so concurrent get() calls
+  // never see a half-empty registry mid-reload.
+  private buildMap(): Map<string, PersonaProfile> {
+    const next = new Map<string, PersonaProfile>();
     const files = readdirSync(PROFILES_DIR).filter((f) => f.endsWith(".yaml"));
     for (const file of files) {
       const raw = readFileSync(join(PROFILES_DIR, file), "utf-8");
       const profile = parse(raw) as PersonaProfile;
-      this.personas.set(profile.id, profile);
+      next.set(profile.id, profile);
     }
+    return next;
   }
 
   reload(): void {
-    this.personas.clear();
-    this.loadAll();
+    // Atomic swap — no clear-then-fill window where get() returns undefined.
+    this.personas = this.buildMap();
   }
 
   get(id: string): PersonaProfile | undefined {

@@ -164,11 +164,47 @@ export class ChatEngine {
     ];
 
     // Call LLM
-    const response = await callLLM(systemPrompt, messages);
+    let response = await callLLM(systemPrompt, messages);
 
     // Post-generation validation — flag AI patterns + hallucinated products
-    const validation = validateResponse(response.text, allowedProductNames);
-    if (!validation.passed) {
+    let validation = validateResponse(response.text, allowedProductNames);
+
+    // [ARCH-3] Single regeneration retry on hallucinated-product violations.
+    // We don't retry for AI-pattern issues (those are softer/cosmetic).
+    // Cap at one retry to bound worst-case cost.
+    const hasHallucination = validation.issues.some((i) => i.type === "hallucinated-product");
+    if (hasHallucination) {
+      const badNames = validation.issues
+        .filter((i) => i.type === "hallucinated-product")
+        .map((i) => i.detail)
+        .join(", ");
+      const correction: LLMMessage[] = [
+        ...messages,
+        { role: "assistant", content: response.text },
+        {
+          role: "user",
+          content:
+            `[시스템 자동 알림] 방금 답변에 존재하지 않는 제품명 "${badNames}"이 포함되어 규칙 위반입니다.\n` +
+            `허용된 제품 allow-list만 사용해서 다시 작성해주세요. 제품 언급이 불확실하면 카테고리 일반론으로 처리하고, "바닐라코 공식몰에서 확인" 같은 표현은 OK.`,
+        },
+      ];
+      const retry = await callLLM(systemPrompt, correction);
+      const retryValidation = validateResponse(retry.text, allowedProductNames);
+      console.warn(
+        `[validation] retry persona=${persona.id} original_issues=${validation.issues.length} retry_issues=${retryValidation.issues.length}`
+      );
+      // Use the retry only if it improved things.
+      if (retryValidation.issues.length < validation.issues.length) {
+        response = {
+          text: retry.text,
+          usage: {
+            input_tokens: response.usage.input_tokens + retry.usage.input_tokens,
+            output_tokens: response.usage.output_tokens + retry.usage.output_tokens,
+          },
+        };
+        validation = retryValidation;
+      }
+    } else if (!validation.passed) {
       console.warn(
         `[validation] persona=${persona.id} issues=${validation.issues.length}`,
         validation.issues.map((i) => `${i.type}:${i.detail}`).join(", ")
