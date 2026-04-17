@@ -12,10 +12,10 @@ import {
 
 const API_BASE = process.env.API_BASE_URL || "http://localhost:3000";
 const API_KEY = process.env.BOT_API_KEY; // beauty-swarm API key
-const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+const DISCORD_TOKEN = process.env.DISCORD_BOT_TOKEN;
 
 if (!DISCORD_TOKEN) {
-  console.error("❌ DISCORD_TOKEN is required");
+  console.error("❌ DISCORD_BOT_TOKEN is required");
   process.exit(1);
 }
 if (!API_KEY) {

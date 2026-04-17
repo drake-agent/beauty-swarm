@@ -16,12 +16,21 @@
 
 export type GuardrailMode = "trust" | "brand" | "hybrid";
 
-export const DEFAULT_GUARDRAIL_MODE: GuardrailMode =
-  (process.env.GUARDRAIL_MODE as GuardrailMode) || "hybrid";
-
 export function isValidGuardrailMode(v: unknown): v is GuardrailMode {
   return v === "trust" || v === "brand" || v === "hybrid";
 }
+
+// [CFG-10] Validate env value, warn + fall back to hybrid if invalid
+// (otherwise garbage values propagate into usage_logs and corrupt A/B metrics).
+function resolveDefaultMode(): GuardrailMode {
+  const raw = process.env.GUARDRAIL_MODE;
+  if (raw === undefined) return "hybrid";
+  if (isValidGuardrailMode(raw)) return raw;
+  console.warn(`⚠️ Invalid GUARDRAIL_MODE="${raw}" (expected trust|brand|hybrid); falling back to hybrid`);
+  return "hybrid";
+}
+
+export const DEFAULT_GUARDRAIL_MODE: GuardrailMode = resolveDefaultMode();
 
 // =====================================================================
 // Guardrail prompt fragments

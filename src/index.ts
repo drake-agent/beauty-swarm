@@ -53,6 +53,17 @@ if (!ADMIN_KEY) {
   console.error("❌ ADMIN_KEY environment variable is required");
   process.exit(1);
 }
+// [CFG-2] Fail fast if Anthropic key absent — otherwise first /chat request fails
+// with an unhelpful 500 instead of a clear boot error.
+if (!process.env.ANTHROPIC_API_KEY) {
+  console.error("❌ ANTHROPIC_API_KEY environment variable is required");
+  process.exit(1);
+}
+// [BUG-12] Minimum length guard on admin key (32 chars) — prevents weak keys.
+if (ADMIN_KEY.length < 32) {
+  console.error("❌ ADMIN_KEY must be at least 32 characters (use a secure random string)");
+  process.exit(1);
+}
 
 // =====================
 // PUBLIC
@@ -178,14 +189,22 @@ async function bootstrap(): Promise<void> {
 }
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
+// [CFG-11] Default to localhost. Operators must explicitly set HOST=0.0.0.0
+// to expose the server publicly — /compose is intentionally unauthenticated
+// and should not be reachable from the internet without explicit opt-in.
+const HOST = process.env.HOST || "127.0.0.1";
 
 bootstrap().then(() => {
-  console.log(`🧴 beauty-swarm v0.4.0 → http://localhost:${PORT}`);
+  console.log(`🧴 beauty-swarm v0.4.0 → http://${HOST}:${PORT}`);
   console.log(`📋 ${registry.list().length} personas | 🧬 ${graph.getAllPainPoints().length} concerns | 🏷️ ${graph.getAllProducts().length} products`);
   console.log(`🐘 PostgreSQL | 🔐 Auth required | 👑 Admin key configured`);
+  if (HOST !== "0.0.0.0" && HOST !== "127.0.0.1") return;
+  if (HOST === "0.0.0.0") {
+    console.warn("⚠️  Binding to 0.0.0.0 — /compose is unauthenticated. Ensure reverse proxy + rate limit in front.");
+  }
 }).catch((err) => {
   console.error("❌ Bootstrap failed:", err.message);
   process.exit(1);
 });
 
-export default { port: PORT, fetch: app.fetch };
+export default { port: PORT, hostname: HOST, fetch: app.fetch };
