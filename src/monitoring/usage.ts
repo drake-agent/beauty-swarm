@@ -20,6 +20,27 @@ export interface UsageEntry {
   intent?: string;
 }
 
+// [SEC-13] Redact anything resembling an API key before persisting to logs.
+// Keeps accidental secret-leakage out of the usage_logs table.
+const KEY_PATTERNS = [
+  /bpc_[a-f0-9]{16,}/gi,              // beauty-swarm keys
+  /sk-ant-[A-Za-z0-9_\-]+/g,          // Anthropic keys
+  /Bearer\s+[A-Za-z0-9_\-]{20,}/gi,   // Any Bearer token
+];
+function sanitizeError(raw: string | undefined): string | null {
+  if (!raw) return null;
+  let s = raw.slice(0, 200); // truncate
+  for (const re of KEY_PATTERNS) s = s.replace(re, "[REDACTED]");
+  return s;
+}
+
+// [SEC-3 / SEC-12] Store only the key prefix in usage_logs, never the plaintext.
+// Callers still pass the full key for convenience; we truncate here.
+function maskApiKey(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  return raw.length > 12 ? raw.slice(0, 12) : raw;
+}
+
 export function logUsage(entry: UsageEntry): void {
   const pool = getPool();
   const cost =
@@ -32,9 +53,9 @@ export function logUsage(entry: UsageEntry): void {
      (api_key, endpoint, persona_id, input_tokens, output_tokens, cost_usd, latency_ms, status_code, error, guardrail_mode, guardrail_level, intent)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
     [
-      entry.api_key, entry.endpoint, entry.persona_id || null,
+      maskApiKey(entry.api_key), entry.endpoint, entry.persona_id || null,
       entry.input_tokens, entry.output_tokens, cost,
-      entry.latency_ms, entry.status_code, entry.error || null,
+      entry.latency_ms, entry.status_code, sanitizeError(entry.error),
       entry.guardrail_mode || null, entry.guardrail_level || null, entry.intent || null,
     ]
   ).catch((err) => {

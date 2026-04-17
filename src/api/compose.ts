@@ -143,8 +143,10 @@ export function composeRoute(
     if (!VALID_PLATFORMS.includes(body.platform)) {
       return c.json({ error: `platform must be one of: ${VALID_PLATFORMS.join(", ")}` }, 400);
     }
-    if (body.post_text.length > 10000) {
-      return c.json({ error: "post_text exceeds 10000 chars" }, 400);
+    // [SEC-6/SEC-1] Tighten cap — /compose is unauthenticated, so large inputs
+    // amplify cost. 2000 chars is larger than any real tweet/IG caption.
+    if (body.post_text.length > 2000) {
+      return c.json({ error: "post_text exceeds 2000 chars" }, 400);
     }
     if (body.guardrail_mode !== undefined && !isValidGuardrailMode(body.guardrail_mode)) {
       return c.json({ error: "guardrail_mode must be 'trust', 'brand', or 'hybrid'" }, 400);
@@ -197,6 +199,11 @@ export function composeRoute(
         body.thread_split === true
       );
 
+      // [SEC-8] Only return raw LLM output when COMPOSE_DEBUG=true.
+      // Leaking it lets attackers iterate prompt-injection payloads against
+      // the full response, not just the platform-truncated one.
+      const includeRaw = process.env.COMPOSE_DEBUG === "true";
+
       const response: ComposeResponse = {
         platform: body.platform,
         persona: chatResponse.persona,
@@ -211,7 +218,7 @@ export function composeRoute(
           passed: chatResponse.validation.passed,
           issue_count: chatResponse.validation.issues.length,
         },
-        raw_message: chatResponse.message,
+        raw_message: includeRaw ? chatResponse.message : "",
       };
 
       logUsage({

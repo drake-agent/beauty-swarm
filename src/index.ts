@@ -15,6 +15,7 @@ import { personasRoute } from "./api/personas.js";
 import { composeRoute } from "./api/compose.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { rateLimitMiddleware } from "./middleware/rate-limit.js";
+import { ipRateLimit } from "./middleware/ip-rate-limit.js";
 import { initSchema } from "./db/schema.js";
 import { seedProducts } from "./db/products.js";
 import {
@@ -36,11 +37,20 @@ const ALLOWED_ORIGINS = process.env.CORS_ORIGINS?.split(",") ?? ["*"];
 app.use("*", cors({
   origin: ALLOWED_ORIGINS.includes("*")
     ? "*"
-    : (origin) => ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
+    // [SEC-9] Return no header for disallowed origins, not a false-positive allow
+    : (origin) => ALLOWED_ORIGINS.includes(origin) ? origin : null,
 }));
 
-// [M6] Global body size limit: 15MB (for image uploads)
-app.use("*", bodyLimit({ maxSize: 15 * 1024 * 1024 }));
+// [SEC-6] Per-route body size limits. The 15MB cap exists only for /analyze
+// (image upload). Other endpoints use small caps so an unauthenticated
+// attacker can't OOM the process with giant JSON bodies.
+app.use("/analyze", bodyLimit({ maxSize: 15 * 1024 * 1024 }));
+app.use("/compose", bodyLimit({ maxSize: 64 * 1024 }));
+app.use("/chat", bodyLimit({ maxSize: 64 * 1024 }));
+app.use("/panel", bodyLimit({ maxSize: 64 * 1024 }));
+app.use("/recommend", bodyLimit({ maxSize: 16 * 1024 }));
+app.use("/admin/*", bodyLimit({ maxSize: 16 * 1024 }));
+app.use("/users/*", bodyLimit({ maxSize: 16 * 1024 }));
 
 // Core services
 const graph = new KnowledgeGraph();
@@ -119,8 +129,11 @@ app.use("/chat", authMiddleware, rateLimitMiddleware);
 app.use("/panel", authMiddleware, rateLimitMiddleware);
 app.use("/recommend", authMiddleware, rateLimitMiddleware);
 app.use("/analyze", authMiddleware, rateLimitMiddleware);
-// /compose intentionally has no auth — it's the human-in-the-loop UI
-// for personal/local use. Bind to localhost only in production deploys.
+// [SEC-1] /compose is intentionally unauthenticated (human-in-the-loop UI for
+// personal/local use). Defensive layers: HOST=127.0.0.1 by default, IP rate
+// limit, and a smaller per-route body cap (see above). Operators who expose
+// this publicly should put additional controls in front of it.
+app.use("/compose", ipRateLimit({ perMin: 10 }));
 app.use("/personas/generate", authMiddleware, rateLimitMiddleware);
 app.use("/users/*", authMiddleware, rateLimitMiddleware);
 

@@ -1,4 +1,4 @@
-import { getPool } from "./schema.js";
+import { getPool, hashApiKey } from "./schema.js";
 
 export interface UserProfile {
   id: string;
@@ -26,10 +26,17 @@ export async function createUser(apiKey: string, name?: string): Promise<UserPro
 }
 
 export async function getUserByApiKey(apiKey: string): Promise<UserProfile | null> {
+  // [SEC-3] Resolve via api_keys.key_hash, not users.api_key plaintext column.
+  // The legacy users.api_key column is still populated for backward compat but
+  // should not be read from. Future migration: drop users.api_key entirely.
   const pool = getPool();
+  const keyHash = hashApiKey(apiKey);
   const { rows } = await pool.query(
-    "SELECT * FROM users WHERE api_key = $1",
-    [apiKey]
+    `SELECT u.* FROM users u
+     JOIN api_keys ak ON ak.user_id = u.id
+     WHERE ak.key_hash = $1 AND ak.is_active = TRUE
+     LIMIT 1`,
+    [keyHash]
   );
   return rows[0] || null;
 }

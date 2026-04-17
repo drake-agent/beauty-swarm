@@ -103,6 +103,30 @@ export async function initSchema(): Promise<void> {
   await p.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS guardrail_level TEXT`);
   await p.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS intent TEXT`);
 
+  // [SEC-3] API key hashing columns. `key_hash` is the sha256 lookup index;
+  // `key_prefix` is a display-safe fragment (e.g. "bpc_abc12345") for admin UIs.
+  // We keep the old `key` column temporarily for backfill + backward compat.
+  await p.query(`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_hash TEXT`);
+  await p.query(`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS key_prefix TEXT`);
+  await p.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash) WHERE key_hash IS NOT NULL`);
+
+  // Backfill: hash any plaintext keys that lack a hash yet.
+  const { rows: legacyKeys } = await p.query<{ key: string }>(
+    `SELECT key FROM api_keys WHERE key_hash IS NULL AND key IS NOT NULL`
+  );
+  if (legacyKeys.length > 0) {
+    const { createHash } = await import("node:crypto");
+    for (const r of legacyKeys) {
+      const hash = createHash("sha256").update(r.key).digest("hex");
+      const prefix = r.key.slice(0, 12);
+      await p.query(
+        `UPDATE api_keys SET key_hash = $1, key_prefix = $2 WHERE key = $3`,
+        [hash, prefix, r.key]
+      );
+    }
+    console.log(`🔐 Backfilled ${legacyKeys.length} API key hash(es)`);
+  }
+
   // Indexes
   await p.query(`CREATE INDEX IF NOT EXISTS idx_usage_api_key ON usage_logs(api_key)`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_usage_created ON usage_logs(created_at)`);
@@ -111,6 +135,14 @@ export async function initSchema(): Promise<void> {
   await p.query(`CREATE INDEX IF NOT EXISTS idx_products_addresses ON products USING GIN(addresses)`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_products_ingredients ON products USING GIN(key_ingredients)`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_products_skin_type ON products USING GIN(skin_type_fit)`);
+}
+
+// [SEC-3] Compute the hash used for api_key lookups. Keep this in one place
+// so auth middleware and key generator agree.
+export function hashApiKey(key: string): string {
+  // Bun exposes Node's crypto API synchronously; this is called on every request.
+  const { createHash } = require("node:crypto");
+  return createHash("sha256").update(key).digest("hex");
 }
 
 export async function closeDb(): Promise<void> {

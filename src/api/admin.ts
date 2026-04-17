@@ -1,16 +1,26 @@
 import { Hono } from "hono";
+import { timingSafeEqual } from "node:crypto";
 import { generateApiKey, listApiKeys } from "../middleware/auth.js";
 import { createUser } from "../db/users.js";
 import { getUsageStats, getRecentLogs } from "../monitoring/usage.js";
 import { getPool } from "../db/schema.js";
 
+// [SEC-2] Constant-time string compare — prevents byte-by-byte timing leak
+// that standard `!==` would allow on the admin key.
+function constantTimeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
+
 export function adminRoute(adminKey: string): Hono {
   const app = new Hono();
+  const expected = `Bearer ${adminKey}`;
 
-  // Admin auth check
   app.use("*", async (c, next) => {
-    const authHeader = c.req.header("Authorization");
-    if (!authHeader || authHeader !== `Bearer ${adminKey}`) {
+    const authHeader = c.req.header("Authorization") || "";
+    if (!constantTimeEqual(authHeader, expected)) {
       return c.json({ error: "Admin access required" }, 403);
     }
     await next();
@@ -26,10 +36,10 @@ export function adminRoute(adminKey: string): Hono {
     const apiKey = await generateApiKey(body.label);
     const user = await createUser(apiKey, body.name);
 
-    // Link api key to user
+    // Link api key to user (by hash-linked row we just inserted)
     await getPool().query(
-      "UPDATE api_keys SET user_id = $1 WHERE key = $2",
-      [user.id, apiKey]
+      "UPDATE api_keys SET user_id = $1 WHERE key_prefix = $2",
+      [user.id, apiKey.slice(0, 12)]
     );
 
     return c.json({
@@ -40,13 +50,13 @@ export function adminRoute(adminKey: string): Hono {
     });
   });
 
-  // List API keys
+  // List API keys (no plaintext — prefix only)
   app.get("/api-keys", async (c) => {
     const keys = await listApiKeys();
     return c.json({
       keys: keys.map((k) => ({
         ...k,
-        key: `${k.key.slice(0, 8)}...${k.key.slice(-4)}`,
+        key: `${k.key_prefix}...`,
       })),
     });
   });
@@ -66,9 +76,16 @@ export function adminRoute(adminKey: string): Hono {
 
   // Recent logs
   app.get("/logs", async (c) => {
-    const limit = parseInt(c.req.query("limit") || "50", 10);
+    // [BUG-10] Guard against NaN / negative / huge limits.
+    const raw = Number(c.req.query("limit"));
+    const limit = Number.isFinite(raw) ? Math.min(Math.max(Math.floor(raw), 1), 500) : 50;
     const logs = await getRecentLogs(limit);
-    return c.json({ logs });
+    // [SEC-12] Mask api_key in responses — never echo full keys to admin UIs.
+    const masked = logs.map((l) => ({
+      ...l,
+      api_key: l.api_key ? `${l.api_key.slice(0, 12)}...` : null,
+    }));
+    return c.json({ logs: masked });
   });
 
   return app;
