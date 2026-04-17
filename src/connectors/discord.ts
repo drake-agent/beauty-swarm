@@ -211,7 +211,8 @@ async function handleChat(
   userMessage: string,
   sessionId?: string
 ): Promise<void> {
-  await msg.channel.sendTyping();
+  // Narrow — PartialGroupDMChannel doesn't expose sendTyping.
+  if ("sendTyping" in msg.channel) await msg.channel.sendTyping();
 
   try {
     const response = await chat(personaId, userMessage, sessionId);
@@ -241,7 +242,8 @@ async function handleChat(
 }
 
 async function handlePanel(msg: Message, question: string): Promise<void> {
-  await msg.channel.sendTyping();
+  // Narrow — PartialGroupDMChannel doesn't expose sendTyping.
+  if ("sendTyping" in msg.channel) await msg.channel.sendTyping();
 
   try {
     // Pick 3 best personas based on keywords
