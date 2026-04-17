@@ -5,7 +5,7 @@
 //
 // Few-shot examples are tone references only — the LLM should not copy content.
 
-import type { Platform } from "../api/compose.js";
+import type { Platform } from "./platform-types.js";
 
 export interface PlatformToneSpec {
   label: string;

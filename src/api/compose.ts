@@ -9,19 +9,19 @@ import type { ChatEngine } from "../chat/engine.js";
 import type { PersonaRegistry } from "../persona/registry.js";
 import { isValidGuardrailMode } from "../chat/guardrails.js";
 import { buildPlatformTonePrompt } from "../chat/platform-tone.js";
+import { autoDetectPersona } from "../persona/auto-detect.js";
+import {
+  type Platform,
+  PLATFORM_LIMITS,
+  VALID_PLATFORMS,
+  TWITTER_THREAD_LIMIT,
+} from "../chat/platform-types.js";
 import { logUsage } from "../monitoring/usage.js";
 import type { GuardrailMode } from "../chat/guardrails.js";
 
-export type Platform = "twitter" | "reddit" | "instagram" | "youtube";
-
-const PLATFORM_LIMITS: Record<Platform, number> = {
-  twitter: 280,
-  reddit: 10000,
-  instagram: 2200,
-  youtube: 10000,
-};
-
-const VALID_PLATFORMS: Platform[] = ["twitter", "reddit", "instagram", "youtube"];
+// [STRUCT-1] Platform + limits moved to src/chat/platform-types.ts;
+// re-exported here so existing imports of Platform from this module keep working.
+export type { Platform };
 
 interface ComposeRequest {
   platform: Platform;
@@ -45,26 +45,9 @@ interface ComposeResponse {
   raw_message: string;        // unformatted LLM output (for debugging)
 }
 
-// Same keyword map as the Discord bot — keep in sync
-const PERSONA_TRIGGERS: Record<string, string> = {
-  "모공": "pore-unni", "블랙헤드": "pore-unni", "딸기코": "pore-unni", "피지": "pore-unni",
-  "칙칙": "glow-seeker", "누렇": "glow-seeker", "광채": "glow-seeker", "윤기": "glow-seeker",
-  "기름": "oil-fighter", "유분": "oil-fighter", "번들": "oil-fighter", "T존": "oil-fighter",
-  "민감": "sensitive-soul", "예민": "sensitive-soul", "장벽": "sensitive-soul", "따가": "sensitive-soul", "홍조": "sensitive-soul",
-  "기미": "gimi-hunter", "색소": "gimi-hunter", "주근깨": "gimi-hunter", "잡티": "gimi-hunter",
-  "초보": "first-timer", "뉴비": "first-timer", "입문": "first-timer", "처음": "first-timer",
-};
-
-function autoDetectPersona(text: string, fallback: string): string {
-  const lower = text.toLowerCase();
-  for (const [keyword, personaId] of Object.entries(PERSONA_TRIGGERS)) {
-    if (lower.includes(keyword)) return personaId;
-  }
-  return fallback;
-}
-
-// Twitter thread splitter — splits at sentence boundaries, adds (1/n) markers
-export function splitForTwitter(text: string, limit: number = 270): string[] {
+// Twitter thread splitter — splits at sentence boundaries, adds (1/n) markers.
+// Default limit is PLATFORM_LIMITS.twitter minus a budget for the " (1/n)" marker.
+export function splitForTwitter(text: string, limit: number = TWITTER_THREAD_LIMIT): string[] {
   const trimmedInput = text.trim();
   if (trimmedInput.length === 0) return [];
   if (trimmedInput.length <= limit) return [trimmedInput];

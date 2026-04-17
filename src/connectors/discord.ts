@@ -26,18 +26,9 @@ if (!API_KEY) {
 // Session tracking: channelId → { session_id, persona_id }
 const channelSessions = new Map<string, { session_id: string; persona_id: string }>();
 
-// Persona emoji map for quick mentions
-const PERSONA_TRIGGERS: Record<string, string> = {
-  "모공": "pore-unni",
-  "칙칙": "glow-seeker",
-  "기름": "oil-fighter",
-  "유분": "oil-fighter",
-  "민감": "sensitive-soul",
-  "기미": "gimi-hunter",
-  "초보": "first-timer",
-  "뉴비": "first-timer",
-  "입문": "first-timer",
-};
+// [STRUCT-2] Persona auto-detect lives in src/persona/auto-detect.ts —
+// shared with /compose so the two channels stay in sync.
+import { autoDetectPersona as autoDetectPersonaShared, PERSONA_TRIGGER_MAP as PERSONA_TRIGGERS } from "../persona/auto-detect.js";
 
 interface ApiPersona {
   id: string;
