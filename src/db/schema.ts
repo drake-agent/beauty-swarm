@@ -106,6 +106,25 @@ export async function initSchema(): Promise<void> {
   await p.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS guardrail_level TEXT`);
   await p.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS intent TEXT`);
 
+  // [ARCH-2] Audit trail for every product change via /admin/products.
+  // Captures before+after snapshots so you can answer "when did we discontinue
+  // X" or "who changed the price of Y" during incidents. Kept separate from
+  // usage_logs because retention policies differ (products_audit = forever,
+  // usage_logs = 90 days).
+  await p.query(`
+    CREATE TABLE IF NOT EXISTS products_audit (
+      id BIGSERIAL PRIMARY KEY,
+      product_id TEXT NOT NULL,
+      action TEXT NOT NULL,  -- 'create' | 'update' | 'stock_toggle' | 'delete'
+      before_snapshot JSONB,
+      after_snapshot JSONB,
+      changed_by TEXT NOT NULL DEFAULT 'admin',
+      changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_products_audit_product ON products_audit(product_id)`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_products_audit_time ON products_audit(changed_at DESC)`);
+
   // [SEC-3] API key hashing columns. `key_hash` is the sha256 lookup index;
   // `key_prefix` is a display-safe fragment (e.g. "bpc_abc12345") for admin UIs.
   // We keep the old `key` column temporarily for backfill + backward compat.

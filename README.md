@@ -74,9 +74,24 @@ POST /personas/generate   # Generate new persona from pain points
 *    /users/*             # User management
 ```
 
-### Admin (`X-Admin-Key: <admin-key>`)
+### Admin (`Authorization: Bearer <admin-key>`)
 ```
-*    /admin/*   # Usage logs, API key management
+POST   /admin/api-keys             # Generate new API key + linked user
+GET    /admin/api-keys             # List keys (prefix-masked)
+GET    /admin/usage                # Aggregate stats (supports since/until/api_key)
+GET    /admin/logs                 # Recent usage log entries
+
+# Product catalog CRUD (changes propagate to chat engine immediately)
+GET    /admin/products             # All products incl. out-of-stock
+GET    /admin/products/:id
+POST   /admin/products             # Create (409 on duplicate id)
+PATCH  /admin/products/:id         # Partial update (e.g. { "in_stock": false, "price_krw": 32000 })
+DELETE /admin/products/:id         # Soft delete — sets in_stock=FALSE, row preserved
+POST   /admin/products/refresh     # Force in-memory cache reload (bypasses 60s cadence)
+
+# Audit trail
+GET    /admin/products/:id/history # Full change history for one product
+GET    /admin/products-audit       # Recent changes across all products (limit clamped [1, 500])
 ```
 
 ## Compose: Social Platform Drafts
@@ -192,10 +207,32 @@ bun run bot:discord
 
 ## Product Inventory (PG-authoritative)
 
-- **Pain-points / ingredients**: YAML (`src/data/pain-points.yaml`, `ingredients.yaml`) — domain schema, changes require redeploy
+- **Pain-points / ingredients**: YAML (`src/data/pain-points.yaml`, `ingredients.yaml`) — domain schema, changes require redeploy.
 - **Products**: PostgreSQL `products` table — authoritative. YAML (`products.yaml`) is a **first-run seed only** (skipped when table is non-empty).
-- Operator edits in PG (`UPDATE products SET in_stock = FALSE WHERE id = '...'`, price changes, new SKUs) propagate to the chat engine within **~60 seconds** (in-memory cache refresh).
+- Operator workflow: use `/admin/products/*` HTTP endpoints or direct SQL. Changes via `/admin/*` propagate **immediately** (graph refresh triggered per mutation); direct SQL edits reflect within ~60s (next cache tick) or on `POST /admin/products/refresh`.
 - Products with `in_stock = FALSE` are excluded from the allow-list and recommendations.
+
+### Audit trail
+
+Every `/admin/products` mutation writes a row to `products_audit` inside the same transaction — `action` (create/update/stock_toggle/delete), full before+after JSON snapshots, `changed_by`, and `changed_at`. View:
+
+```bash
+# All changes to one SKU
+curl -H 'Authorization: Bearer <admin-key>' http://localhost:3000/admin/products/clean-it-zero-original/history
+
+# Recent audit across all products
+curl -H 'Authorization: Bearer <admin-key>' http://localhost:3000/admin/products-audit?limit=20
+```
+
+### Example: mark out of stock
+
+```bash
+curl -X PATCH http://localhost:3000/admin/products/clean-it-zero-calming \
+  -H 'Authorization: Bearer <admin-key>' \
+  -H 'Content-Type: application/json' \
+  -d '{"in_stock": false}'
+# → action logged as "stock_toggle"; chat engine stops recommending within milliseconds
+```
 
 ## Stack
 

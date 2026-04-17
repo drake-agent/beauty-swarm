@@ -174,7 +174,7 @@ app.post("/personas/generate", async (c) => {
 // =====================
 // ADMIN
 // =====================
-app.route("/admin", adminRoute(ADMIN_KEY));
+app.route("/admin", adminRoute(ADMIN_KEY, graph));
 
 // =====================
 // Bootstrap
